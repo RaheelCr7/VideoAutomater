@@ -215,6 +215,428 @@ class CinematicMotionEngine:
         logger.info(f"Rendered transformation clip {output_mp4.name} successfully ({output_mp4.stat().st_size / (1024*1024):.2f} MB).")
         return output_mp4
 
+    def render_multi_stage_transformation_clip(
+        self,
+        stages: list[tuple[Path, float, float, str]],
+        output_mp4: Path,
+        total_duration: float,
+        branding_badge: str = "BEYOND 80",
+    ) -> Path:
+        """Render a continuous, narration-synchronized explanatory transformation across physical states."""
+        output_mp4.parent.mkdir(parents=True, exist_ok=True)
+        total_frames = max(1, int(round(total_duration * self.fps)))
+
+        # Pre-load and scale all stage images
+        target_w, target_h = int(self.width * 1.10), int(self.height * 1.10)
+        stage_imgs = [
+            Image.open(p).convert("RGB").resize((target_w, target_h), Image.Resampling.LANCZOS)
+            for p, _, _, _ in stages
+        ]
+
+        logger.info(
+            f"Rendering multi-stage transformation clip ({len(stages)} stages): "
+            f"{total_duration:.2f}s, {total_frames} frames @ {self.fps}fps -> {output_mp4.name}"
+        )
+
+        cmd = [
+            self.ffmpeg_bin,
+            "-y",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{self.width}x{self.height}",
+            "-r",
+            str(self.fps),
+            "-i",
+            "-",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "17",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(output_mp4.resolve()),
+        ]
+
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        max_dx = target_w - self.width
+        max_dy = target_h - self.height
+
+        try:
+            for frame_idx in range(total_frames):
+                t = frame_idx / self.fps
+                progress = frame_idx / max(1, total_frames - 1)
+
+                # Camera motion: slow cinematic drift downwards (simulating depth descent)
+                cam_x = int((0.5 - 0.5 * math.cos(progress * math.pi * 0.8)) * (max_dx * 0.7))
+                cam_y = int(progress * (max_dy * 0.9))
+
+                # Determine active stage and compute morph/transition
+                frame_img = None
+                for i in range(len(stages)):
+                    _p, st, et, mode = stages[i]
+                    if st <= t < et or (i == len(stages) - 1 and t >= st):
+                        stage_dur = max(0.001, et - st)
+                        stage_progress = (t - st) / stage_dur
+                        img_curr = stage_imgs[i]
+
+                        # Apply stage-specific authentic explanatory object animation
+                        if "vibration" in mode:
+                            # 1. Covalent bond vibration, shockwave propagation, and bond rupture
+                            vib_amp = 1.0 + 3.0 * stage_progress
+                            vib_offset = int(vib_amp * math.sin(t * 32.0 * math.pi))
+                            crop_x = max(0, min(max_dx, cam_x + vib_offset))
+                            crop_y = max(0, min(max_dy, cam_y))
+                            curr_frame = img_curr.crop((crop_x, crop_y, crop_x + self.width, crop_y + self.height))
+
+                            # Bloom lighting as shockwave arrives
+                            if stage_progress > 0.65:
+                                bloom_t = (stage_progress - 0.65) / 0.35
+                                flash = 0.25 * math.sin(bloom_t * math.pi)
+                                curr_frame = ImageEnhance.Brightness(curr_frame).enhance(1.0 + flash)
+
+                            curr_frame = self._draw_hydrocarbon_dissociation_layer(curr_frame, stage_progress, t)
+
+                        elif "nucleation" in mode:
+                            # 2. Free carbon atom inward migration and sp3 crystal lattice nucleation
+                            curr_frame = img_curr.crop((cam_x, cam_y, cam_x + self.width, cam_y + self.height))
+                            pulse = 0.05 * math.sin(t * 8.0)
+                            curr_frame = ImageEnhance.Contrast(curr_frame).enhance(1.0 + pulse)
+                            curr_frame = self._draw_carbon_nucleation_layer(curr_frame, stage_progress, t)
+
+                        else:  # diamond caustics and sinking
+                            # 3. Rotating 3D octahedral diamond with prismatic caustics and fluid descent
+                            sink_offset = int(12.0 * math.sin(t * 1.5))
+                            crop_x = max(0, min(max_dx, cam_x + sink_offset))
+                            crop_y = max(0, min(max_dy, cam_y))
+                            curr_frame = img_curr.crop((crop_x, crop_y, crop_x + self.width, crop_y + self.height))
+                            curr_frame = self._draw_3d_diamond_crystal_layer(curr_frame, stage_progress, t)
+
+                        # Handle cross-fade into next stage during transition overlap
+                        transition_window = 0.40  # 0.4s smooth optical cross-dissolve between stages
+                        time_to_end = et - t
+                        if time_to_end < transition_window and i < len(stages) - 1:
+                            next_raw = stage_imgs[i + 1].crop((cam_x, cam_y, cam_x + self.width, cam_y + self.height))
+                            # Draw next stage's initial state for seamless transition
+                            if "nucleation" in stages[i + 1][3]:
+                                next_frame = self._draw_carbon_nucleation_layer(next_raw, 0.0, t)
+                            else:
+                                next_frame = self._draw_3d_diamond_crystal_layer(next_raw, 0.0, t)
+                            alpha = 0.5 - 0.5 * math.cos((1.0 - time_to_end / transition_window) * math.pi)
+                            curr_frame = Image.blend(curr_frame, next_frame, alpha)
+
+                        frame_img = curr_frame
+                        break
+
+                if frame_img is None:
+                    frame_img = stage_imgs[-1].crop((cam_x, cam_y, cam_x + self.width, cam_y + self.height))
+
+                self._apply_editorial_overlays(frame_img, branding_badge, None, t)
+                proc.stdin.write(frame_img.tobytes())
+
+            proc.stdin.close()
+            proc.wait()
+
+            if proc.returncode != 0:
+                err = proc.stderr.read().decode("utf-8", errors="replace")
+                raise RuntimeError(f"FFmpeg multi-stage render failed: {err}")
+
+        except Exception as e:
+            if proc.poll() is None:
+                proc.kill()
+            raise e
+
+        logger.info(f"Rendered multi-stage transformation clip {output_mp4.name} ({output_mp4.stat().st_size / (1024*1024):.2f} MB).")
+        return output_mp4
+
+    def _draw_hydrocarbon_dissociation_layer(
+        self,
+        base_frame: Image.Image,
+        stage_progress: float,
+        t: float,
+    ) -> Image.Image:
+        """Render molecular bond oscillation, hyperbaric shockwaves, and covalent bond rupture."""
+        overlay = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay, "RGBA")
+
+        # Center coordinates for molecular core
+        cx = 540
+        cy = 820 + int(20 * math.sin(t * 2.0))
+
+        # Hyperbaric shockwave compression wave (expanding spherical wavefronts)
+        shock_phase = (stage_progress * 2.5) % 1.0
+        shock_r = int(120 + shock_phase * 750)
+        shock_alpha = int(max(0, 140 * (1.0 - shock_phase)))
+        if shock_alpha > 5:
+            draw.ellipse(
+                [cx - shock_r, cy - shock_r, cx + shock_r, cy + shock_r],
+                outline=(100, 220, 255, shock_alpha),
+                width=max(2, int(6 * (1.0 - shock_phase))),
+            )
+            inner_r = max(10, shock_r - 60)
+            draw.ellipse(
+                [cx - inner_r, cy - inner_r, cx + inner_r, cy + inner_r],
+                outline=(255, 180, 50, int(shock_alpha * 0.6)),
+                width=2,
+            )
+
+        # 4 hydrogen atoms positioned tetrahedrally around central carbon
+        angles = [0.85, 2.25, 3.90, 5.30]
+        base_dist = 175.0
+
+        # Covalent bond vibration (18 Hz)
+        vib_freq = 18.0 * (1.0 + stage_progress)
+        vib_offset = 6.0 * math.sin(t * vib_freq * math.pi)
+
+        # Bond rupture begins around stage_progress > 0.40 (speech: 'tear hydrocarbon molecules apart')
+        if stage_progress < 0.40:
+            sep_factor = 0.0
+        else:
+            sep_norm = (stage_progress - 0.40) / 0.60
+            sep_factor = (sep_norm ** 1.6) * 480.0
+
+        for k, angle in enumerate(angles):
+            dist = base_dist + vib_offset + sep_factor
+            hx = cx + int(dist * math.cos(angle))
+            hy = cy + int(dist * math.sin(angle))
+
+            # Draw covalent bond cylinder or electric snapping arc
+            if sep_factor < 120:
+                bond_w = max(2, int(8 * (1.0 - sep_factor / 150.0)))
+                draw.line([(cx, cy), (hx, hy)], fill=(80, 210, 255, 190), width=bond_w)
+                draw.line([(cx, cy), (hx, hy)], fill=(255, 255, 255, 220), width=max(1, bond_w // 2))
+            elif sep_factor < 260:
+                # Electric micro-arcs snapping between carbon and separating hydrogen
+                arc_points = [(cx, cy)]
+                steps = 5
+                for step in range(1, steps):
+                    frac = step / steps
+                    mid_x = cx + int(frac * (hx - cx)) + int(18 * math.sin(t * 30 + step * 2))
+                    mid_y = cy + int(frac * (hy - cy)) + int(18 * math.cos(t * 30 + step * 2))
+                    arc_points.append((mid_x, mid_y))
+                arc_points.append((hx, hy))
+                for ap_idx in range(len(arc_points) - 1):
+                    draw.line([arc_points[ap_idx], arc_points[ap_idx + 1]], fill=(140, 240, 255, 220), width=3)
+                    draw.line([arc_points[ap_idx], arc_points[ap_idx + 1]], fill=(255, 255, 255, 240), width=1)
+
+            # Hydrogen atom sphere (white core with cyan diffuse glow)
+            hr = 26
+            if sep_factor > 20:
+                wake_len = min(80, int(sep_factor * 0.4))
+                wx = hx - int(wake_len * math.cos(angle))
+                wy = hy - int(wake_len * math.sin(angle))
+                draw.line([(wx, wy), (hx, hy)], fill=(0, 200, 255, 90), width=10)
+
+            draw.ellipse([hx - hr - 12, hy - hr - 12, hx + hr + 12, hy + hr + 12], fill=(0, 210, 255, 60))
+            draw.ellipse([hx - hr, hy - hr, hx + hr, hy + hr], fill=(220, 245, 255, 240))
+            draw.ellipse([hx - 8, hy - 10, hx - 2, hy - 4], fill=(255, 255, 255, 255))
+
+        # Central Carbon Atom Core
+        cr = 46
+        core_heat = min(1.0, stage_progress * 1.2)
+        r_col = int(20 + 200 * core_heat)
+        g_col = int(180 + 70 * (1.0 - core_heat))
+        b_col = int(255 * (1.0 - 0.4 * core_heat))
+        draw.ellipse([cx - cr - 24, cy - cr - 24, cx + cr + 24, cy + cr + 24], fill=(r_col, g_col, b_col, 50))
+        draw.ellipse([cx - cr, cy - cr, cx + cr, cy + cr], fill=(r_col, g_col, b_col, 220))
+        draw.ellipse([cx - cr + 10, cy - cr + 8, cx - cr + 26, cy - cr + 24], fill=(255, 255, 255, 230))
+
+        return Image.alpha_composite(base_frame.convert("RGBA"), overlay).convert("RGB")
+
+    def _draw_carbon_nucleation_layer(
+        self,
+        base_frame: Image.Image,
+        stage_progress: float,
+        t: float,
+    ) -> Image.Image:
+        """Render converging free carbon atoms coalescing into sp3 diamond crystal lattice seed."""
+        overlay = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay, "RGBA")
+
+        cx = 540
+        cy = 840 + int(15 * math.sin(t * 1.5))
+
+        conv_t = min(1.0, stage_progress * 1.2)
+        conv_s = 1.0 - (1.0 - conv_t) ** 3
+
+        outer_angles = [0.0, 1.05, 2.09, 3.14, 4.19, 5.24]
+        r_start = 450.0
+        r_target = 135.0
+        r_curr = r_start * (1.0 - conv_s) + r_target * conv_s
+
+        carbon_positions = [(cx, cy)]
+        for angle in outer_angles:
+            swirl = (1.0 - conv_s) * 0.8
+            ax = cx + int(r_curr * math.cos(angle + swirl))
+            ay = cy + int(r_curr * math.sin(angle + swirl))
+            carbon_positions.append((ax, ay))
+
+        # Dynamic convergent particle wake lines under hyperbaric compression
+        if conv_s < 0.95:
+            for angle in outer_angles:
+                tail_len = int(80 * (1.0 - conv_s))
+                tx = cx + int((r_curr + tail_len) * math.cos(angle))
+                ty = cy + int((r_curr + tail_len) * math.sin(angle))
+                hx = cx + int(r_curr * math.cos(angle))
+                hy = cy + int(r_curr * math.sin(angle))
+                draw.line([(tx, ty), (hx, hy)], fill=(0, 220, 255, int(90 * (1.0 - conv_s))), width=4)
+
+        # Covalent bonding beams locking in
+        if conv_s > 0.45:
+            bond_lock = (conv_s - 0.45) / 0.55
+            bond_alpha = int(220 * bond_lock)
+            for i in range(1, len(carbon_positions)):
+                draw.line([(cx, cy), carbon_positions[i]], fill=(0, 240, 255, bond_alpha), width=4)
+                draw.line([(cx, cy), carbon_positions[i]], fill=(255, 255, 255, int(bond_alpha * 0.8)), width=1)
+                next_i = 1 if i == len(carbon_positions) - 1 else i + 1
+                draw.line([carbon_positions[i], carbon_positions[next_i]], fill=(0, 190, 240, int(bond_alpha * 0.6)), width=2)
+
+        # Draw plasma arcs across forming lattice
+        arc_prob = math.sin(t * 16.0)
+        if arc_prob > 0.3 and len(carbon_positions) > 3:
+            p1 = carbon_positions[int(abs(math.sin(t * 7)) * 6) + 1]
+            p2 = carbon_positions[int(abs(math.cos(t * 5)) * 6) + 1]
+            draw.line([p1, p2], fill=(160, 240, 255, 180), width=2)
+
+        # Draw carbon atom nodes
+        for idx, (px, py) in enumerate(carbon_positions):
+            node_r = 34 if idx == 0 else 24
+            draw.ellipse([px - node_r - 10, py - node_r - 10, px + node_r + 10, py + node_r + 10], fill=(0, 200, 255, 50))
+            draw.ellipse([px - node_r, py - node_r, px + node_r, py + node_r], fill=(30, 45, 75, 230), outline=(0, 230, 255, 210), width=2)
+            draw.ellipse([px - 6, py - 8, px, py - 2], fill=(220, 245, 255, 240))
+
+        # Central lattice crystallization flash
+        if stage_progress > 0.75:
+            flash_t = (stage_progress - 0.75) / 0.25
+            flash_r = int(200 * math.sin(flash_t * math.pi))
+            draw.ellipse([cx - flash_r, cy - flash_r, cx + flash_r, cy + flash_r], fill=(200, 245, 255, int(110 * math.sin(flash_t * math.pi))))
+
+        return Image.alpha_composite(base_frame.convert("RGBA"), overlay).convert("RGB")
+
+    def _draw_3d_diamond_crystal_layer(
+        self,
+        base_frame: Image.Image,
+        stage_progress: float,
+        t: float,
+    ) -> Image.Image:
+        """Render a 3D faceted octahedral diamond crystal rotating, refracting caustics, and sinking through mantle fluid."""
+        overlay = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay, "RGBA")
+
+        # Downward gravitational descent coordinates
+        cx = 540
+        start_y = 680
+        total_sink = 320.0
+        cy = int(start_y + stage_progress * total_sink)
+
+        # Fluid streamlines moving upward past sinking diamond
+        streamline_count = 12
+        for s_idx in range(streamline_count):
+            sx = int(cx - 360 + (s_idx * 60) + 15 * math.sin(s_idx + t))
+            sy_base = (t * 220 + s_idx * 160) % self.height
+            sy_start = int(self.height - sy_base)
+            sy_end = sy_start - int(120 + 40 * math.sin(s_idx))
+            draw.line([(sx, sy_start), (sx, sy_end)], fill=(0, 215, 255, 35), width=2)
+
+        # 3D Octahedral Diamond Geometry
+        H = 240.0
+        R = 190.0
+        rot_y = t * 1.35
+        tilt_x = 0.26
+
+        v_top = np.array([0.0, -H, 0.0])
+        v_bot = np.array([0.0, +H, 0.0])
+        equator = []
+        for i in range(4):
+            phi = rot_y + i * (math.pi / 2.0)
+            equator.append(np.array([R * math.cos(phi), 0.0, R * math.sin(phi)]))
+
+        def project_3d(v: np.ndarray) -> tuple[float, float, float]:
+            x, y, z = v[0], v[1], v[2]
+            cos_tx, sin_tx = math.cos(tilt_x), math.sin(tilt_x)
+            y_rot = y * cos_tx - z * sin_tx
+            z_rot = y * sin_tx + z * cos_tx
+            return cx + x, cy + y_rot, z_rot
+
+        p_top = project_3d(v_top)
+        p_bot = project_3d(v_bot)
+        p_eq = [project_3d(v) for v in equator]
+
+        facets = [
+            (p_top, p_eq[0], p_eq[1]),
+            (p_top, p_eq[1], p_eq[2]),
+            (p_top, p_eq[2], p_eq[3]),
+            (p_top, p_eq[3], p_eq[0]),
+            (p_bot, p_eq[1], p_eq[0]),
+            (p_bot, p_eq[2], p_eq[1]),
+            (p_bot, p_eq[3], p_eq[2]),
+            (p_bot, p_eq[0], p_eq[3]),
+        ]
+
+        light_dir = np.array([-0.35, -0.65, -0.67])
+        light_dir = light_dir / np.linalg.norm(light_dir)
+
+        # Prismatic caustic rays radiating from vertices
+        for pt in [p_top, p_bot, p_eq[0], p_eq[2]]:
+            px, py, _ = pt
+            c_angle = rot_y * 1.5 + px * 0.01
+            for beam in range(3):
+                b_ang = c_angle + beam * (2.0 * math.pi / 3.0)
+                ray_len = 160.0 + 40.0 * math.sin(t * 5.0 + beam)
+                bx = px + ray_len * math.cos(b_ang)
+                by = py + ray_len * math.sin(b_ang)
+                c_colors = [(180, 100, 255, 60), (0, 220, 255, 75), (255, 215, 80, 60)]
+                draw.polygon([(px, py), (bx - 12, by + 12), (bx + 12, by - 12)], fill=c_colors[beam])
+
+        def facet_z(f):
+            return (f[0][2] + f[1][2] + f[2][2]) / 3.0
+
+        sorted_facets = sorted(facets, key=facet_z, reverse=True)
+
+        for pt1, pt2, pt3 in sorted_facets:
+            poly2d = [(pt1[0], pt1[1]), (pt2[0], pt2[1]), (pt3[0], pt3[1])]
+            v_a = np.array([pt2[0] - pt1[0], pt2[1] - pt1[1], pt2[2] - pt1[2]])
+            v_b = np.array([pt3[0] - pt1[0], pt3[1] - pt1[1], pt3[2] - pt1[2]])
+            normal = np.cross(v_a, v_b)
+            norm_len = np.linalg.norm(normal)
+            if norm_len < 1e-6:
+                continue
+            normal = normal / norm_len
+
+            if normal[2] > 0.05:
+                continue
+
+            diff = max(0.15, float(np.dot(-normal, light_dir)))
+            view_dir = np.array([0.0, 0.0, -1.0])
+            ref_dir = light_dir - 2.0 * np.dot(light_dir, normal) * normal
+            spec = max(0.0, float(np.dot(ref_dir, view_dir))) ** 16
+
+            r_val = int(min(255, 140 + 115 * spec + 30 * diff))
+            g_val = int(min(255, 210 + 45 * spec))
+            b_val = 255
+            alpha_val = int(min(240, 130 + 80 * diff + 50 * spec))
+
+            draw.polygon(poly2d, fill=(r_val, g_val, b_val, alpha_val))
+            draw.line([poly2d[0], poly2d[1]], fill=(220, 245, 255, 220), width=2)
+            draw.line([poly2d[1], poly2d[2]], fill=(220, 245, 255, 220), width=2)
+            draw.line([poly2d[2], poly2d[0]], fill=(220, 245, 255, 220), width=2)
+
+            if spec > 0.55:
+                centroid_x = int((poly2d[0][0] + poly2d[1][0] + poly2d[2][0]) / 3.0)
+                centroid_y = int((poly2d[0][1] + poly2d[1][1] + poly2d[2][1]) / 3.0)
+                flare_len = int(45 * spec)
+                draw.line([(centroid_x - flare_len, centroid_y), (centroid_x + flare_len, centroid_y)], fill=(255, 255, 255, 250), width=3)
+                draw.line([(centroid_x, centroid_y - flare_len), (centroid_x, centroid_y + flare_len)], fill=(255, 255, 255, 250), width=3)
+                draw.ellipse([centroid_x - 8, centroid_y - 8, centroid_x + 8, centroid_y + 8], fill=(255, 255, 255, 255))
+
+        return Image.alpha_composite(base_frame.convert("RGBA"), overlay).convert("RGB")
+
     def _apply_editorial_overlays(
         self,
         img: Image.Image,
@@ -222,38 +644,23 @@ class CinematicMotionEngine:
         scientific_label: str | None,
         t: float,
     ) -> None:
-        """Apply subtle, non-intrusive documentary branding and scientific annotation tags."""
+        """Apply minimalist Beyond 80 documentary watermark (uncluttered, no fake technical boxes)."""
         draw = ImageDraw.Draw(img, "RGBA")
         font = ImageFont.load_default()
 
-        # 1. Subtle Beyond 80 Branding Badge in Top Corner (Y = 90 - 130)
-        # Never blocks visuals, low-key dark pill with cyan accent
+        # Minimalist Beyond 80 Watermark in Top Corner (Y = 85 - 120)
+        # Discrete semi-transparent dark pill with subtle cyan status pip
         badge_text = branding_badge.upper()
         badge_len = len(badge_text) * 7
-        bx, by = 60, 100
+        bx, by = 60, 90
         draw.rounded_rectangle(
-            [bx, by, bx + badge_len + 30, by + 34],
+            [bx, by, bx + badge_len + 28, by + 32],
             radius=6,
-            fill=(10, 15, 25, 175),
-            outline=(0, 215, 255, 130),
+            fill=(8, 12, 20, 160),
+            outline=(0, 215, 255, 90),
             width=1,
         )
-        # Small glowing cyan status pip
-        pip_alpha = int(180 + 75 * math.sin(t * 3.0))
-        draw.ellipse([bx + 10, by + 12, bx + 18, by + 20], fill=(0, 215, 255, pip_alpha))
-        draw.text((bx + 26, by + 10), badge_text, fill=(220, 230, 245, 220), font=font)
-
-        # 2. Scientific Label & Telemetry Callout (Y = 160 - 220)
-        # Well above subtitle safe zone (Y < 1320)
-        if scientific_label:
-            lbl_text = scientific_label.upper()
-            lbl_len = len(lbl_text) * 7
-            lx, ly = 60, 150
-            draw.rounded_rectangle(
-                [lx, ly, lx + lbl_len + 24, ly + 32],
-                radius=4,
-                fill=(5, 10, 20, 185),
-                outline=(255, 215, 0, 140),
-                width=1,
-            )
-            draw.text((lx + 12, ly + 9), lbl_text, fill=(255, 215, 0, 230), font=font)
+        # Small glowing status pip
+        pip_alpha = int(170 + 70 * math.sin(t * 3.0))
+        draw.ellipse([bx + 10, by + 11, bx + 18, by + 19], fill=(0, 215, 255, pip_alpha))
+        draw.text((bx + 26, by + 9), badge_text, fill=(225, 235, 245, 220), font=font)

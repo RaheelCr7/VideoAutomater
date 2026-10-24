@@ -131,9 +131,10 @@ class SubtitleGenerator:
             should_close = False
             if len(curr_chunk) >= cfg.max_words_per_segment:
                 should_close = True
-            elif len(curr_chunk) >= cfg.preferred_words_per_segment and (
-                wm.word.endswith((",", ";", ":", ".")) or remaining <= cfg.max_words_per_segment
-            ):
+            elif wm.word.endswith((",", ";", ":", ".")) and len(curr_chunk) >= cfg.min_words_per_segment:
+                if remaining >= cfg.min_words_per_segment or remaining == 0:
+                    should_close = True
+            elif len(curr_chunk) >= cfg.preferred_words_per_segment and remaining <= cfg.max_words_per_segment:
                 if remaining >= cfg.min_words_per_segment or remaining == 0:
                     should_close = True
 

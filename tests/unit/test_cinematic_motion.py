@@ -55,3 +55,28 @@ def test_transformation_clip_rendering(sample_test_images):
         )
         assert clip.exists()
         assert clip.stat().st_size > 1000
+
+
+def test_multi_stage_transformation_clip_rendering(sample_test_images):
+    """Verify CinematicMotionEngine renders multi-stage explanatory transformation."""
+    img_a, img_b = sample_test_images
+    engine = CinematicMotionEngine(width=540, height=960, fps=15)
+
+    with tempfile.TemporaryDirectory() as td:
+        img_c = Path(td) / "test_c.jpg"
+        Image.new("RGB", (768, 1376), (10, 40, 20)).save(img_c, "JPEG")
+
+        stages = [
+            (img_a, 0.0, 0.5, "vibration"),
+            (img_b, 0.5, 1.0, "nucleation"),
+            (img_c, 1.0, 1.5, "diamond"),
+        ]
+        out_mp4 = Path(td) / "out_multi.mp4"
+        clip = engine.render_multi_stage_transformation_clip(
+            stages=stages,
+            output_mp4=out_mp4,
+            total_duration=1.5,
+            branding_badge="BEYOND 80",
+        )
+        assert clip.exists()
+        assert clip.stat().st_size > 1000
