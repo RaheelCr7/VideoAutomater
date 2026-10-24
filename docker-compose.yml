@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  agent-control-center:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: beyond80_control_center
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - APP_ENV=production
+      - DEFAULT_TIMEZONE=Asia/Karachi
+      - APP_DATA_DIR=/app/output
+    volumes:
+      # Persistent storage for jobs, video masters, and agent DB
+      - ./output:/app/output
+      - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

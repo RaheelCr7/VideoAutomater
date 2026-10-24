@@ -32,9 +32,9 @@ class SubtitleConfig:
     safe_zone_y_max: int = 1550             # Bottom boundary of safe zone
     margin_v: int = 460                     # 1920 - 460 = 1460px baseline (centered in [1350, 1550])
     margin_lr: int = 100                    # Left/Right margins (880px available width)
-    max_words_per_segment: int = 6
+    max_words_per_segment: int = 5
     min_words_per_segment: int = 2
-    preferred_words_per_segment: int = 4
+    preferred_words_per_segment: int = 3
     max_chars_per_line: int = 26
     max_lines: int = 2
 
@@ -145,7 +145,7 @@ class SubtitleGenerator:
         if curr_chunk:
             if chunks and len(curr_chunk) < cfg.min_words_per_segment:
                 # Merge tiny orphan with previous chunk if it doesn't exceed 7 words
-                if len(chunks[-1]) + len(curr_chunk) <= 7:
+                if len(chunks[-1]) + len(curr_chunk) <= cfg.max_words_per_segment:
                     chunks[-1].extend(curr_chunk)
                 else:
                     chunks.append(curr_chunk)
@@ -207,7 +207,7 @@ class SubtitleGenerator:
 
         if curr_chunk:
             if chunks and len(curr_chunk) < cfg.min_words_per_segment:
-                if len(chunks[-1]) + len(curr_chunk) <= 7:
+                if len(chunks[-1]) + len(curr_chunk) <= cfg.max_words_per_segment:
                     chunks[-1].extend(curr_chunk)
                 else:
                     chunks.append(curr_chunk)

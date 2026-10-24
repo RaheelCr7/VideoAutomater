@@ -82,10 +82,9 @@ class MicroscopyVisualGenerator:
             draw.line([(cx + lx2, cy + ly2), (cx + lx2 - 15, cy + ly2 + 25)], fill=(120, 220, 230), width=4)
             draw.line([(cx + lx2, cy + ly2), (cx + lx2 + 15, cy + ly2 + 25)], fill=(120, 220, 230), width=4)
 
-        # Subtle scientific scale overlay
+        # Clear illustration notice (no invented physical scales)
         font_sm = self._get_font(26)
-        draw.line([(100, self.height - 300), (350, self.height - 300)], fill=(200, 240, 255), width=4)
-        draw.text((100, self.height - 340), "SCALE: 250 µm // ESEM 2.5 kV", fill=(200, 240, 255), font=font_sm)
+        draw.text((100, self.height - 320), "PROCEDURAL ILLUSTRATION // TARDIGRADE MORPHOLOGY MODEL", fill=(180, 230, 245), font=font_sm)
 
         img.save(output_path, quality=95)
         return output_path
@@ -122,10 +121,8 @@ class MicroscopyVisualGenerator:
             r = np.random.randint(8, 20)
             draw.ellipse([nx - r, ny - r, nx + r, ny + r], fill=(160, 120, 255), outline=(220, 200, 255), width=2)
 
-        # Vitrification Glass Transition Boundary line
-        draw.line([(100, cy + 280), (self.width - 100, cy + 280)], fill=(240, 180, 50), width=3)
-        font = self._get_font(28)
-        draw.text((100, cy + 295), "VITRIFICATION BOUNDARY // AMORPHOUS BIOGLASS (Tg = -20 °C)", fill=(240, 180, 50), font=font)
+        font = self._get_font(26)
+        draw.text((100, cy + 295), "SCIENTIFIC ILLUSTRATION // AMORPHOUS BIOGLASS MATRIX MODEL", fill=(240, 180, 50), font=font)
 
         img.save(output_path, quality=95)
         return output_path
@@ -138,7 +135,7 @@ class MicroscopyVisualGenerator:
 
         cx, cy = self.width // 2, self.height // 2 - 100
 
-        # Compressed spherical 'tun' organism state (3% residual hydration)
+        # Compressed spherical 'tun' organism state
         for r_glow in range(320, 60, -20):
             draw.ellipse([cx - r_glow, cy - int(r_glow * 0.9), cx + r_glow, cy + int(r_glow * 0.9)], outline=(30, 60, 75))
 
@@ -153,8 +150,7 @@ class MicroscopyVisualGenerator:
         draw.ellipse([cx - 130, cy - 110, cx + 130, cy + 110], fill=(15, 60, 75), outline=(130, 230, 255), width=3)
 
         font = self._get_font(26)
-        draw.text((100, self.height - 320), "STATE: CRYPTOBIOSIS // DESICCATED TUN", fill=(140, 220, 240), font=font)
-        draw.text((100, self.height - 280), "METABOLIC ACTIVITY: 0.00% // RESIDUAL H2O: 3.1%", fill=(140, 220, 240), font=font)
+        draw.text((100, self.height - 320), "PROCEDURAL ILLUSTRATION // CRYPTOBIOTIC TUN STATE MODEL", fill=(140, 220, 240), font=font)
 
         img.save(output_path, quality=95)
         return output_path

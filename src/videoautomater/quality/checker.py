@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 import re
 import subprocess
+from typing import Any
 
 import imageio_ffmpeg
 
@@ -153,6 +154,7 @@ class QualityChecker:
         video_path: Path,
         script: StoryScript | None = None,
         subtitles_path: Path | None = None,
+        brief: Any = None,
     ) -> QualityReport:
         """Run all mandatory technical, subtitle, and editorial quality gates."""
         if not video_path.exists():

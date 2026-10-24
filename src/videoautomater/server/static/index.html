@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beyond 80 — Agent Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="dark-theme">
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo-glow"></div>
+        <div class="brand-text">
+          <span class="brand-title">BEYOND 80</span>
+          <span class="brand-badge">AGENT OS</span>
+        </div>
+      </div>
+
+      <div class="system-status-indicator">
+        <div class="pulse-dot active"></div>
+        <div class="status-meta">
+          <span class="status-label">ORCHESTRATOR ONLINE</span>
+          <span class="timezone-label" id="tz-display">Asia/Karachi</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-view="dashboard" id="nav-dashboard">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+          Dashboard
+        </button>
+        <button class="nav-item" data-view="chat" id="nav-chat">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+          AI Director
+          <span class="nav-pill" id="chat-count-pill">Live</span>
+        </button>
+        <button class="nav-item" data-view="queue" id="nav-queue">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+          Production Queue
+          <span class="nav-pill warn" id="queue-count-pill">0</span>
+        </button>
+        <button class="nav-item" data-view="review" id="nav-review">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg>
+          Review Studio
+          <span class="nav-pill alert" id="review-count-pill">0</span>
+        </button>
+        <button class="nav-item" data-view="library" id="nav-library">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+          Video Library
+        </button>
+        <button class="nav-item" data-view="agents" id="nav-agents">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54A8.98 8.98 0 0 1 12 20v-2c0-.55-.45-1-1-1h-1v-2h3c.55 0 1-.45 1-1v-1h2c1.1 0 2-.9 2-2v-.41c1.8 1.54 2.94 3.82 2.9 6.87z"/></svg>
+          Agent Fleet (13)
+        </button>
+        <button class="nav-item" data-view="scheduler" id="nav-scheduler">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+          Scheduler
+        </button>
+        <button class="nav-item" data-view="publishing" id="nav-publishing">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+          Publishing Hub
+        </button>
+        <button class="nav-item" data-view="analytics" id="nav-analytics">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+          Analytics
+        </button>
+        <button class="nav-item" data-view="settings" id="nav-settings">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          Settings
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="user-avatar">AD</div>
+          <div class="user-info">
+            <span class="user-name">Creative Director</span>
+            <span class="user-role">Full Autonomous Access</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Bar Header -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1 class="page-title" id="current-view-title">Dashboard Overview</h1>
+          <span class="page-subtitle" id="current-view-subtitle">Real-time telemetry and production orchestration</span>
+        </div>
+        <div class="topbar-right">
+          <button class="btn btn-primary" id="btn-quick-new-job">
+            <svg class="icon-sm" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            New Video Job
+          </button>
+        </div>
+      </header>
+
+      <!-- View Containers -->
+      <div class="view-container">
+        <!-- 1. DASHBOARD VIEW -->
+        <section class="view active" id="view-dashboard">
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <span class="metric-title">Completed Masters</span>
+              <div class="metric-value" id="metric-completed">0</div>
+              <div class="metric-trend positive">↑ 100% verified 80s standards</div>
+            </div>
+            <div class="metric-card highlight">
+              <span class="metric-title">Awaiting Human Review</span>
+              <div class="metric-value" id="metric-review">0</div>
+              <div class="metric-trend warn">Approval required before release</div>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Active Agent Pipeline</span>
+              <div class="metric-value" id="metric-running">0</div>
+              <div class="metric-trend">13 coordinated agents</div>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Simulated Publications</span>
+              <div class="metric-value" id="metric-published">0</div>
+              <div class="metric-trend">4 connected platforms</div>
+            </div>
+          </div>
+
+          <div class="dashboard-split">
+            <div class="dashboard-panel">
+              <div class="panel-header">
+                <h3>Live Production Activity</h3>
+                <span class="tag">Auto-updating</span>
+              </div>
+              <div class="panel-body">
+                <div class="table-wrapper">
+                  <table class="data-table" id="dashboard-recent-table">
+                    <thead>
+                      <tr>
+                        <th>Job ID</th>
+                        <th>Topic</th>
+                        <th>Status</th>
+                        <th>Review Status</th>
+                        <th>Created</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashboard-recent-tbody">
+                      <tr><td colspan="6" class="loading-cell">Loading live platform jobs...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="dashboard-panel">
+              <div class="panel-header">
+                <h3>AI Director Quick Instruction</h3>
+                <span class="tag tag-accent">Natural Language</span>
+              </div>
+              <div class="panel-body">
+                <p class="panel-hint">Send direct instructions to the autonomous agent fleet:</p>
+                <div class="quick-chat-input-wrap">
+                  <textarea id="quick-chat-input" placeholder="e.g. Create an 80-second cinematic video explaining how black holes bend light. Use scientifically accurate 3D animations and save for my review."></textarea>
+                  <button class="btn btn-primary" id="btn-quick-send">Send Instruction</button>
+                </div>
+                <div class="quick-examples">
+                  <span class="hint-label">Suggested Prompts:</span>
+                  <button class="chip-btn" data-prompt="Create an 80-second cinematic video explaining how black holes bend light. Use scientifically accurate 3D animations and save for my review.">Black Holes & Light Bending</button>
+                  <button class="chip-btn" data-prompt="Create an 80-second cinematic breakdown of Tardigrade Cryptobiosis and cellular vitrification.">Tardigrade Cryptobiosis</button>
+                  <button class="chip-btn" data-prompt="Make the next videos more dramatic but keep scientific accuracy.">Adjust Style: Dramatic & Scientific</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. AI DIRECTOR CHAT VIEW -->
+        <section class="view" id="view-chat">
+          <div class="chat-layout">
+            <div class="chat-sidebar">
+              <h3>Directing Capabilities</h3>
+              <p class="sidebar-text">The AI Director understands high-level creative and logistical commands:</p>
+              <ul class="capability-list">
+                <li><strong>Video Creation:</strong> "Create an 80-second video on [Topic]"</li>
+                <li><strong>Batch Scheduling:</strong> "Create 3 space videos tomorrow"</li>
+                <li><strong>Style Adjustments:</strong> "Make pacing faster and visuals darker"</li>
+                <li><strong>Scene Regeneration:</strong> "Regenerate the animation at 35 seconds"</li>
+              </ul>
+              <div class="director-status-box">
+                <span class="box-label">DIRECTOR STATE</span>
+                <span class="box-val">Autonomous Coordinator Ready</span>
+              </div>
+            </div>
+
+            <div class="chat-main">
+              <div class="chat-messages" id="chat-messages-container">
+                <div class="chat-bubble ai">
+                  <div class="bubble-header">
+                    <span class="agent-name">AI Creative Director</span>
+                    <span class="bubble-time">System</span>
+                  </div>
+                  <div class="bubble-body">
+                    Welcome to the Beyond 80 Agent Control Center. I coordinate the 13-agent autonomous video production pipeline. You can instruct me in natural language to research topics, generate cinematic vertical videos, schedule production, or modify existing scenes.
+                  </div>
+                </div>
+              </div>
+
+              <div class="chat-input-bar">
+                <textarea id="chat-user-input" rows="2" placeholder="Instruct the AI Director (e.g. 'Create an 80s video on black hole photon spheres...')..."></textarea>
+                <button class="btn btn-primary" id="btn-send-chat">
+                  <span>Send</span>
+                  <svg class="icon-sm" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. PRODUCTION QUEUE & MONITOR VIEW -->
+        <section class="view" id="view-queue">
+          <div class="queue-toolbar">
+            <div class="filter-group">
+              <button class="filter-btn active" data-filter="all">All Jobs</button>
+              <button class="filter-btn" data-filter="running">Running</button>
+              <button class="filter-btn" data-filter="completed">Completed</button>
+              <button class="filter-btn" data-filter="queued">Queued</button>
+            </div>
+            <button class="btn btn-outline" id="btn-refresh-queue">Refresh Queue</button>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Job ID</th>
+                  <th>Topic</th>
+                  <th>Current Stage</th>
+                  <th>Progress</th>
+                  <th>Approval Mode</th>
+                  <th>Review Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="queue-jobs-tbody">
+                <tr><td colspan="7" class="loading-cell">Loading job executions...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Job Stage Inspector Modal / Drawer -->
+          <div class="inspector-drawer hidden" id="job-inspector-drawer">
+            <div class="drawer-header">
+              <h3 id="inspector-job-title">Job Execution Trace</h3>
+              <button class="btn-close" id="btn-close-inspector">&times;</button>
+            </div>
+            <div class="drawer-body" id="inspector-job-content">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. VIDEO REVIEW STUDIO VIEW -->
+        <section class="view" id="view-review">
+          <div class="review-studio-grid">
+            <!-- Left: Video Player and Controls -->
+            <div class="player-column">
+              <div class="video-stage">
+                <div class="vertical-video-wrapper">
+                  <video id="review-video-player" controls preload="metadata">
+                    <source src="" type="video/mp4">
+                    Your browser does not support vertical video playback.
+                  </video>
+                  <div class="video-overlay-badge" id="player-status-badge">PENDING_HUMAN_APPROVAL</div>
+                </div>
+              </div>
+
+              <!-- Timeline & Navigation Scrubber -->
+              <div class="timeline-controls">
+                <div class="timeline-meta">
+                  <span class="time-readout" id="current-time-readout">00:00.0 / 01:20.0</span>
+                  <span class="scene-readout" id="current-scene-readout">Scene 1 / 5</span>
+                </div>
+                <div class="scene-jump-strip" id="scene-jump-strip">
+                  <!-- Generated dynamically based on scenes -->
+                </div>
+              </div>
+
+              <!-- Approval & Release Controls Box -->
+              <div class="approval-action-card">
+                <div class="card-header">
+                  <h4>Release Authorization Gate</h4>
+                  <span class="security-tag">Protected Master</span>
+                </div>
+                <p class="gate-description">
+                  Strict Governance: Videos cannot be published until explicitly marked <code>APPROVED_FOR_RELEASE</code> and release authorization is explicitly confirmed.
+                </p>
+                <div class="action-btn-row">
+                  <button class="btn btn-success" id="btn-approve-video">Approve for Release</button>
+                  <button class="btn btn-warning" id="btn-request-changes">Request Changes</button>
+                  <button class="btn btn-danger" id="btn-reject-video">Reject Master</button>
+                </div>
+                <div class="auth-toggle-row">
+                  <label class="switch-label">
+                    <input type="checkbox" id="chk-authorize-release">
+                    <span class="switch-text"><strong>AUTHORIZE PUBLIC DISTRIBUTION</strong> (Unlocks Multi-Account Publishing)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Scene Breakdown, Script & Feedback Studio -->
+            <div class="inspector-column">
+              <div class="tab-strip">
+                <button class="tab-btn active" data-tab="tab-feedback">Feedback & Revisions</button>
+                <button class="tab-btn" data-tab="tab-script">Script & Narration</button>
+                <button class="tab-btn" data-tab="tab-qa">QA & Provenance</button>
+                <button class="tab-btn" data-tab="tab-versions">Version History</button>
+              </div>
+
+              <!-- Tab 1: Feedback & Timestamp Regeneration -->
+              <div class="tab-content active" id="tab-feedback">
+                <div class="feedback-input-box">
+                  <h5>Add Timestamp-Specific Feedback</h5>
+                  <div class="time-input-row">
+                    <span>At Video Time:</span>
+                    <input type="number" id="feedback-timestamp" step="0.1" value="0.0">
+                    <button class="btn btn-sm btn-outline" id="btn-sync-time">Use Current Time</button>
+                  </div>
+                  <textarea id="feedback-comment" placeholder="e.g. The relativistic accretion disk at this point should have greater asymmetric Doppler beaming on the left limb..."></textarea>
+                  <label class="regen-checkbox-label">
+                    <input type="checkbox" id="chk-request-regeneration">
+                    <span>Request autonomous re-render / regeneration at this timestamp (creates new version)</span>
+                  </label>
+                  <button class="btn btn-primary" id="btn-submit-feedback">Submit Feedback</button>
+                </div>
+
+                <div class="feedback-history-list">
+                  <h5>Recorded Feedback & Change Log</h5>
+                  <div id="feedback-items-container">
+                    <p class="empty-state">No feedback recorded for this master video.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab 2: Script & Narration -->
+              <div class="tab-content" id="tab-script">
+                <div class="script-inspector" id="script-inspector-content">
+                  <p class="empty-state">Select a video from the library to inspect its verified script.</p>
+                </div>
+              </div>
+
+              <!-- Tab 3: Scientific QA & Provenance -->
+              <div class="tab-content" id="tab-qa">
+                <div class="qa-inspector" id="qa-inspector-content">
+                  <p class="empty-state">Select a video to view automated scientific validation and DOI provenance records.</p>
+                </div>
+              </div>
+
+              <!-- Tab 4: Version History -->
+              <div class="tab-content" id="tab-versions">
+                <div class="version-history-list" id="version-history-container">
+                  <p class="empty-state">No prior versions recorded.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. VIDEO LIBRARY VIEW -->
+        <section class="view" id="view-library">
+          <div class="library-header">
+            <h3>Rendered Master Videos</h3>
+            <button class="btn btn-outline" id="btn-refresh-library">Refresh Library</button>
+          </div>
+          <div class="library-grid" id="library-cards-container">
+            <p class="loading-cell">Loading library...</p>
+          </div>
+        </section>
+
+        <!-- 6. AGENT FLEET VIEW -->
+        <section class="view" id="view-agents">
+          <div class="agents-header">
+            <h3>Autonomous 13-Agent Fleet Configuration</h3>
+            <p class="subtitle">Each agent has dedicated domain specialization, temperature, model routing, and error states.</p>
+          </div>
+          <div class="agent-cards-grid" id="agent-cards-container">
+            <!-- Dynamically populated -->
+          </div>
+        </section>
+
+        <!-- 7. SCHEDULER VIEW -->
+        <section class="view" id="view-scheduler">
+          <div class="scheduler-header">
+            <div>
+              <h3>Autonomous Production Scheduler</h3>
+              <p class="subtitle">Durable background scheduler. Configured timezone: <strong id="scheduler-tz-label">Asia/Karachi</strong></p>
+            </div>
+            <button class="btn btn-primary" id="btn-new-schedule">+ Create Schedule</button>
+          </div>
+
+          <div class="schedules-list" id="schedules-container">
+            <!-- Dynamically populated -->
+          </div>
+        </section>
+
+        <!-- 8. PUBLISHING HUB VIEW -->
+        <section class="view" id="view-publishing">
+          <div class="publishing-header">
+            <div>
+              <h3>Multi-Platform Distribution Hub</h3>
+              <p class="subtitle">Integrated destination accounts with security authorization gates and simulated connectors.</p>
+            </div>
+            <button class="btn btn-primary" id="btn-new-account">+ Add Social Account</button>
+          </div>
+
+          <div class="publishing-split">
+            <div class="pub-accounts-panel">
+              <h4>Connected Destinations</h4>
+              <div class="accounts-grid" id="pub-accounts-container">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+            <div class="pub-tasks-panel">
+              <h4>Publishing Execution Queue & History</h4>
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Task ID</th>
+                      <th>Platform</th>
+                      <th>Account</th>
+                      <th>Status</th>
+                      <th>Published URL</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pub-tasks-tbody">
+                    <tr><td colspan="6" class="loading-cell">Loading publishing records...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 9. ANALYTICS VIEW -->
+        <section class="view" id="view-analytics">
+          <div class="analytics-metrics-grid">
+            <div class="metric-card">
+              <span class="metric-title">QA Verification Rate</span>
+              <div class="metric-value" id="analytics-qa-rate">100%</div>
+              <div class="metric-trend positive">0 unverifiable claims allowed</div>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Human Release Approvals</span>
+              <div class="metric-value" id="analytics-approval-rate">0%</div>
+              <div class="metric-trend warn">Pending creative signoff</div>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Average Runtime</span>
+              <div class="metric-value" id="analytics-avg-duration">80.0s</div>
+              <div class="metric-trend">Exact Beyond 80 standard</div>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Connected Outlets</span>
+              <div class="metric-value" id="analytics-platforms">4</div>
+              <div class="metric-trend">YouTube, IG, FB, TikTok</div>
+            </div>
+          </div>
+
+          <div class="analytics-panels">
+            <div class="dashboard-panel">
+              <div class="panel-header">
+                <h3>Production Topic Distribution</h3>
+              </div>
+              <div class="panel-body" id="analytics-topic-dist">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+            <div class="dashboard-panel">
+              <div class="panel-header">
+                <h3>Audience Engagement & Retention Simulation</h3>
+              </div>
+              <div class="panel-body">
+                <p class="sidebar-text">Simulated performance data based on vertical educational format benchmarks:</p>
+                <div class="stat-row">
+                  <span>Simulated Total Views:</span>
+                  <strong id="analytics-sim-views">0</strong>
+                </div>
+                <div class="stat-row">
+                  <span>Average Retention (30s):</span>
+                  <strong>84.2%</strong>
+                </div>
+                <div class="stat-row">
+                  <span>Full Completion Rate (80s):</span>
+                  <strong>61.7%</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 10. SETTINGS VIEW -->
+        <section class="view" id="view-settings">
+          <div class="settings-card">
+            <h3>Platform & Governance Configuration</h3>
+            <div class="form-group">
+              <label>Default Approval Mode</label>
+              <select id="setting-approval-mode" class="form-control">
+                <option value="REQUIRED_APPROVAL">REQUIRED APPROVAL (Default - Strictest Safety)</option>
+                <option value="OPTIONAL_REVIEW">OPTIONAL REVIEW</option>
+                <option value="AUTO">AUTO (Experimental - Strictly Prohibited for Episode 001)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Default Timezone</label>
+              <input type="text" id="setting-timezone" class="form-control" value="Asia/Karachi">
+            </div>
+            <div class="form-group">
+              <label>Target Episode Duration (Seconds)</label>
+              <input type="number" id="setting-duration" class="form-control" value="80.0" step="1">
+            </div>
+            <div class="form-group">
+              <label>Daily Production Quota Budget</label>
+              <input type="number" id="setting-quota" class="form-control" value="5">
+            </div>
+            <button class="btn btn-primary" id="btn-save-settings">Save System Settings</button>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Create Job Modal -->
+  <div class="modal-backdrop hidden" id="modal-create-job">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Launch Autonomous Video Production</h3>
+        <button class="btn-close" id="btn-close-modal-job">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Topic / Concept Title (Leave blank for autonomous scientific topic discovery)</label>
+          <input type="text" id="modal-job-topic" class="form-control" placeholder="e.g. How Black Holes Bend Light (Relativistic Lensing)">
+        </div>
+        <div class="form-group">
+          <label>Target Duration (Seconds)</label>
+          <input type="number" id="modal-job-duration" class="form-control" value="80.0">
+        </div>
+        <div class="form-group">
+          <label>Approval Governance</label>
+          <select id="modal-job-approval" class="form-control">
+            <option value="REQUIRED_APPROVAL">REQUIRED APPROVAL (Human Gate)</option>
+            <option value="OPTIONAL_REVIEW">OPTIONAL REVIEW</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Director Instructions / Creative Constraints</label>
+          <textarea id="modal-job-instructions" class="form-control" placeholder="e.g. Ensure accurate Schwarzschild ray-tracing and Doppler boosting on accretion disk."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="btn-cancel-modal-job">Cancel</button>
+        <button class="btn btn-primary" id="btn-submit-modal-job">Submit to Agent Fleet</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

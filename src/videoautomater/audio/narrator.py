@@ -16,6 +16,11 @@ from videoautomater.models.script import StoryScript
 logger = logging.getLogger(__name__)
 
 
+class NarrationSynthesisError(Exception):
+    """Raised when neural speech generation fails to prevent tone substitution."""
+    pass
+
+
 class SpeechSynthesisResult(tuple):
     """Backwards-compatible tuple (duration, segments) with sentence, word boundary, and sync type attributes."""
     duration: float
@@ -54,7 +59,10 @@ class AudioNarrator:
         output_wav_path: Path,
         rate: str | None = None,
     ) -> SpeechSynthesisResult:
-        """Synthesize script text using Edge-TTS with authentic word-boundary timestamps."""
+        """Synthesize script text using Edge-TTS with authentic word-boundary timestamps.
+
+        Fails explicitly if speech synthesis fails; never substitutes tone or silent track.
+        """
         output_wav_path.parent.mkdir(parents=True, exist_ok=True)
         temp_mp3 = output_wav_path.with_suffix(".temp.mp3")
 
@@ -85,8 +93,11 @@ class AudioNarrator:
                             )
                         )
         except Exception as exc:
-            logger.warning(f"Edge-TTS synthesis error: {exc}. Generating programmatic audio fallback.")
-            return self._generate_fallback_audio(script, output_wav_path)
+            logger.error(f"Edge-TTS synthesis error: {exc}. Failing explicitly to prevent fake audio substitution.")
+            raise NarrationSynthesisError(f"Neural speech narration failed: {exc}. Tone substitution strictly forbidden.")
+
+        if not temp_mp3.exists() or temp_mp3.stat().st_size < 1000:
+            raise NarrationSynthesisError("Neural speech synthesis emitted zero or corrupt audio bytes.")
 
         # Convert mp3 to standard 48kHz WAV using FFmpeg
         cmd = [
@@ -106,6 +117,8 @@ class AudioNarrator:
 
         # Measure audio duration
         duration = self._get_audio_duration(output_wav_path)
+        if duration <= 0.0:
+            raise NarrationSynthesisError("Synthesized WAV duration is 0.0 seconds.")
 
         from videoautomater.visuals.subtitles import SubtitleGenerator
 
@@ -131,12 +144,7 @@ class AudioNarrator:
                 f"{len(words_data)} words, {len(segments)} segments."
             )
         else:
-            # Pacing estimation fallback
-            section_events = [(sec.timeline_start, sec.timeline_end, sec.narration_text) for sec in script.sections]
-            segments = SubtitleGenerator.segment_transcript(section_events)
-            sentence_events = section_events
-            sync_type = "ESTIMATED_OFFLINE_FALLBACK"
-            logger.warning("No TTS word boundaries emitted. Used estimated pacing fallback.")
+            raise NarrationSynthesisError("Edge-TTS produced audio without word boundary markers.")
 
         return SpeechSynthesisResult(duration, segments, sentence_events, words_data, sync_type)
 
@@ -144,22 +152,6 @@ class AudioNarrator:
         """Read duration of an audio file in seconds."""
         info = sf.info(str(audio_path))
         return float(info.duration)
-
-    def _generate_fallback_audio(
-        self, script: StoryScript, output_wav_path: Path
-    ) -> SpeechSynthesisResult:
-        """Generate offline fallback audio tone bed if network TTS is unavailable."""
-        sample_rate = 48000
-        duration = 80.0
-        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
-        carrier = 0.05 * np.sin(2 * np.pi * 220 * t) + 0.03 * np.sin(2 * np.pi * 440 * t)
-        sf.write(str(output_wav_path), carrier, sample_rate)
-
-        from videoautomater.visuals.subtitles import SubtitleGenerator
-        section_events = [(sec.timeline_start, sec.timeline_end, sec.narration_text) for sec in script.sections]
-        segments = SubtitleGenerator.segment_transcript(section_events)
-        words_fallback: list[SubtitleWord] = []
-        return SpeechSynthesisResult(duration, segments, section_events, words_fallback)
 
     def generate_ambient_music(self, duration: float, output_path: Path) -> Path:
         """Synthesize a rich, cinematic ambient documentary soundscape with harmonic resolution outro."""
@@ -231,7 +223,7 @@ class AudioNarrator:
             f"[0:a]apad=whole_dur={target_duration}[voice];"
             f"[1:a]atrim=0:{target_duration}[bg_trimmed];"
             f"[bg_trimmed][voice]sidechaincompress=threshold=0.08:ratio=3.5:attack=50:release=350[ducked_bg];"
-            f"[voice][ducked_bg]amix=inputs=2:duration=first:dropout_transition=0,"
+            f"[voice][ducked_bg]amix=inputs=2:duration=longest:dropout_transition=0,"
             f"loudnorm=I={settings.target_lufs}:TP=-1.5:LRA=11[out]"
         )
 
@@ -246,6 +238,8 @@ class AudioNarrator:
             filter_complex,
             "-map",
             "[out]",
+            "-t",
+            str(target_duration),
             "-ar",
             "48000",
             "-c:a",
