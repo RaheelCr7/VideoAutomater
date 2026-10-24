@@ -107,6 +107,36 @@ def demo(
     )
 
 
+@app.command("test-10s")
+def test_10s(
+    output: str = typer.Option("output/ten_second_test", "--output", "-o", help="Directory for 10-second quality test output"),
+):
+    """Generate the 10-second Beyond 80 visual-first cinematic quality test."""
+    from videoautomater.orchestration.ten_second_runner import TenSecondTestRunner
+
+    console.print(
+        Panel.fit(
+            f"[bold cyan]Beyond 80 // Cinematic Visual-First Quality Test[/bold cyan]\n"
+            f"[dim]Executing 10-second Hybrid Documentary & 3D Simulation Production...[/dim]",
+            border_style="cyan",
+        )
+    )
+
+    runner = TenSecondTestRunner(output_dir=Path(output))
+    with console.status("[bold green]Rendering cinematic motion & word-aligned subtitles...", spinner="dots"):
+        test_path = asyncio.run(runner.run_quality_test())
+
+    console.print(
+        Panel.fit(
+            f"[bold green]Beyond 80 10-Second Quality Test Completed Successfully![/bold green]\n"
+            f"[bold]Video:[/bold] {test_path}\n"
+            f"[bold]Contact Sheet:[/bold] {test_path.parent / 'contact_sheet.jpg'}\n"
+            f"[bold]Artifacts:[/bold] {test_path.parent}",
+            border_style="green",
+        )
+    )
+
+
 def main():
     app()
 
