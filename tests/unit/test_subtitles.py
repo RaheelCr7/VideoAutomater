@@ -214,3 +214,51 @@ def test_qa_12_non_hardcoded_editorial_quality_scoring():
     assert isinstance(rating.hook_strength, float)
     assert isinstance(rating.pacing_score, float)
     assert isinstance(rating.narrative_payoff, float)
+
+
+def test_qa_13_segment_words_real_tts_timestamps():
+    """Criterion 13: Verify segment_words uses authoritative word timestamps without estimation."""
+    from videoautomater.models.media import SubtitleWord
+    test_words = [
+        SubtitleWord(word="Deep", start_time=0.100, end_time=0.400),
+        SubtitleWord(word="inside", start_time=0.412, end_time=0.900),
+        SubtitleWord(word="icy", start_time=0.912, end_time=1.225),
+        SubtitleWord(word="planets", start_time=1.238, end_time=1.700),
+        SubtitleWord(word="like", start_time=1.712, end_time=1.912),
+        SubtitleWord(word="Neptune,", start_time=1.925, end_time=2.575),
+        SubtitleWord(word="diamonds", start_time=2.600, end_time=3.100),
+        SubtitleWord(word="fall.", start_time=3.150, end_time=3.700),
+    ]
+
+    segments = SubtitleGenerator.segment_words(test_words)
+    assert len(segments) >= 2
+    # First segment start time must match first word start time exactly
+    assert segments[0].start_time == 0.100
+    assert segments[0].words[0].word == "Deep"
+    # Punctuation-based boundary
+    assert any(s.text.endswith("Neptune,") for s in segments)
+    # Monotonic timestamps
+    for i in range(1, len(segments)):
+        assert segments[i].start_time >= segments[i - 1].start_time
+
+
+def test_qa_14_verify_narration_alignment():
+    """Criterion 14: Verify ordered narration-to-caption alignment verification."""
+    from videoautomater.models.media import SubtitleWord
+    script_text = "Deep inside icy planets like Neptune, diamonds fall."
+    words = [
+        SubtitleWord(word="Deep", start_time=0.1, end_time=0.4),
+        SubtitleWord(word="inside", start_time=0.4, end_time=0.9),
+        SubtitleWord(word="icy", start_time=0.9, end_time=1.2),
+        SubtitleWord(word="planets", start_time=1.2, end_time=1.7),
+        SubtitleWord(word="like", start_time=1.7, end_time=1.9),
+        SubtitleWord(word="Neptune,", start_time=1.9, end_time=2.5),
+        SubtitleWord(word="diamonds", start_time=2.6, end_time=3.1),
+        SubtitleWord(word="fall.", start_time=3.1, end_time=3.7),
+    ]
+    segments = SubtitleGenerator.segment_words(words)
+    passed, stats = SubtitleGenerator.verify_narration_alignment(script_text, segments)
+    assert passed
+    assert stats["is_ordered"] is True
+    assert stats["is_monotonic"] is True
+    assert float(stats["vocabulary_coverage"].replace("%", "")) >= 98.0

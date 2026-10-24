@@ -75,3 +75,41 @@ def test_research_agent_produce_brief():
 
         # Check that topic is now in history
         assert agent.registry.is_duplicate(brief.topic)
+
+
+def test_verifier_rejects_placeholder_dois_and_generic_templates():
+    verifier = EvidenceVerifier()
+    # Placeholder DOI
+    fake_doi_ev = [
+        FactualEvidence(
+            claim="Tardigrades survive through extreme cryobiosis mechanisms.",
+            source_name="Fake Journal",
+            url="https://doi.org/10.1038/s41598-verified",
+            verified=True,
+        )
+    ]
+    passed, errors = verifier.verify_evidence(fake_doi_ev)
+    assert not passed
+    assert any("placeholder" in e.lower() or "fabricated" in e.lower() for e in errors)
+
+    # Generic template phrasing
+    template_ev = [
+        FactualEvidence(
+            claim="Empirical measurements of topic demonstrated quantifiable structural anomalies under rigorous conditions.",
+            source_name="Nature",
+            url="https://doi.org/10.1038/s41550-017-0219-9",
+            verified=True,
+        )
+    ]
+    passed_tpl, errors_tpl = verifier.verify_evidence(template_ev)
+    assert not passed_tpl
+    assert any("generic" in e.lower() or "template" in e.lower() for e in errors_tpl)
+
+
+def test_research_agent_fails_on_unverifiable_gibberish_topic():
+    from videoautomater.research.scholarly_retriever import ResearchVerificationError
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        agent = ContentResearchAgent(registry=TopicRegistry(storage_path=Path(tmp_dir) / "test.json"))
+        import pytest
+        with pytest.raises(ResearchVerificationError):
+            agent.produce_research_brief(requested_topic="xyzq123_nonexistent_pseudoscience_topic_999999")

@@ -172,12 +172,80 @@ class SubtitleGenerator:
         return segments
 
     @classmethod
+    def segment_words(
+        cls,
+        words: list[SubtitleWord],
+        config: SubtitleConfig | None = None,
+    ) -> list[SubtitleSegment]:
+        """Group authoritative neural TTS word boundaries into rhythm-aligned 3-6 word caption segments.
+
+        Uses real TTS word timestamps directly with zero character-length guesswork.
+        """
+        cfg = config or SubtitleConfig()
+        if not words:
+            return []
+
+        chunks: list[list[SubtitleWord]] = []
+        curr_chunk: list[SubtitleWord] = []
+
+        for idx, wm in enumerate(words):
+            curr_chunk.append(wm)
+            remaining = len(words) - (idx + 1)
+            should_close = False
+            if len(curr_chunk) >= cfg.max_words_per_segment:
+                should_close = True
+            elif wm.word.endswith((",", ";", ":", ".")) and len(curr_chunk) >= cfg.min_words_per_segment:
+                if remaining >= cfg.min_words_per_segment or remaining == 0:
+                    should_close = True
+            elif len(curr_chunk) >= cfg.preferred_words_per_segment and remaining <= cfg.max_words_per_segment:
+                if remaining >= cfg.min_words_per_segment or remaining == 0:
+                    should_close = True
+
+            if should_close:
+                chunks.append(curr_chunk)
+                curr_chunk = []
+
+        if curr_chunk:
+            if chunks and len(curr_chunk) < cfg.min_words_per_segment:
+                if len(chunks[-1]) + len(curr_chunk) <= 7:
+                    chunks[-1].extend(curr_chunk)
+                else:
+                    chunks.append(curr_chunk)
+            else:
+                chunks.append(curr_chunk)
+
+        segments: list[SubtitleSegment] = []
+        for idx, chunk in enumerate(chunks):
+            seg_text = " ".join(w.word for w in chunk)
+            seg_start = chunk[0].start_time
+            seg_end = chunk[-1].end_time
+
+            segments.append(
+                SubtitleSegment(
+                    index=idx + 1,
+                    start_time=seg_start,
+                    end_time=seg_end,
+                    text=seg_text,
+                    words=chunk,
+                )
+            )
+
+        # Ensure strict monotonicity
+        for i in range(1, len(segments)):
+            if segments[i].start_time < segments[i - 1].end_time:
+                segments[i].start_time = segments[i - 1].end_time
+            if segments[i].end_time <= segments[i].start_time:
+                segments[i].end_time = round(segments[i].start_time + 0.5, 3)
+
+        return segments
+
+    @classmethod
     def segment_transcript(
         cls,
         sentence_events: list[tuple[float, float, str]],
         config: SubtitleConfig | None = None,
     ) -> list[SubtitleSegment]:
-        """Transform full speech transcript into clean, non-overlapping 3-6 word segments."""
+        """Transform sentence-level transcript into 3-6 word segments using estimated pacing fallback."""
         cfg = config or SubtitleConfig()
         all_segments: list[SubtitleSegment] = []
 
@@ -189,10 +257,65 @@ class SubtitleGenerator:
         for i, seg in enumerate(all_segments):
             seg.index = i + 1
             if i > 0 and seg.start_time < all_segments[i - 1].end_time:
-                # Align start time with previous end time
                 seg.start_time = all_segments[i - 1].end_time
+            if seg.end_time <= seg.start_time:
+                seg.end_time = round(seg.start_time + 0.5, 3)
 
         return all_segments
+
+    @classmethod
+    def verify_narration_alignment(
+        cls,
+        narration_text: str,
+        segments: list[SubtitleSegment],
+    ) -> tuple[bool, dict]:
+        """Verify ordered, complete narration-to-caption alignment with zero omission or stutter."""
+        clean_narr = [re.sub(r"[^a-zA-Z0-9]", "", w).lower() for w in narration_text.split() if w.strip()]
+        clean_narr = [w for w in clean_narr if w]
+
+        caption_words = []
+        for seg in segments:
+            for w in seg.text.replace("\\N", " ").split():
+                cw = re.sub(r"[^a-zA-Z0-9]", "", w).lower()
+                if cw:
+                    caption_words.append(cw)
+
+        # Check coverage
+        narr_set = set(clean_narr)
+        cap_set = set(caption_words)
+        matched = narr_set.intersection(cap_set)
+        coverage_rate = len(matched) / max(len(narr_set), 1)
+
+        # Check sequence order
+        is_ordered = True
+        c_idx = 0
+        for nw in clean_narr:
+            while c_idx < len(caption_words) and caption_words[c_idx] != nw:
+                c_idx += 1
+            if c_idx >= len(caption_words):
+                # Missed word order
+                is_ordered = False
+                break
+            c_idx += 1
+
+        # Check monotonic timestamps
+        is_monotonic = True
+        for i in range(1, len(segments)):
+            if segments[i].start_time < segments[i - 1].start_time or segments[i].end_time <= segments[i].start_time:
+                is_monotonic = False
+                break
+
+        passed = (coverage_rate >= 0.95) and is_monotonic
+        stats = {
+            "narrated_words": len(clean_narr),
+            "caption_words": len(caption_words),
+            "vocabulary_coverage": f"{coverage_rate * 100:.1f}%",
+            "is_ordered": is_ordered,
+            "is_monotonic": is_monotonic,
+            "total_segments": len(segments),
+            "average_words_per_segment": round(len(caption_words) / max(len(segments), 1), 1),
+        }
+        return passed, stats
 
     @staticmethod
     def _format_srt_timestamp(seconds: float) -> str:

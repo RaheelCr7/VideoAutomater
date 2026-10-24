@@ -389,18 +389,31 @@ class QualityChecker:
                 m_data = json.loads(manifest_path.read_text(encoding="utf-8"))
                 assets_list = m_data.get("assets", [])
                 if len(assets_list) >= 6:
-                    has_valid_manifest = all(
-                        a.get("sha256") and a.get("asset_nature") and a.get("commercial_use_cleared")
-                        for a in assets_list
-                    )
-                    manifest_details = f"{len(assets_list)} assets verified with SHA-256 and nature classification"
+                    valid_items = True
+                    for a in assets_list:
+                        if not (a.get("sha256") and a.get("asset_nature") and a.get("creator_or_rights_holder") and a.get("verified_license")):
+                            valid_items = False
+                            manifest_details = f"Asset {a.get('asset_key', '?')} missing required rights provenance fields"
+                            break
+                        # Strict rule: AI-generated reconstructions must NEVER be represented as authentic documentary footage
+                        nature = a.get("asset_nature", "")
+                        creator = a.get("creator_or_rights_holder", "")
+                        desc = a.get("description", "")
+                        if "AUTHENTIC" in nature and any(syn in creator.lower() or syn in desc.lower() for syn in ["ai", "synthesiz", "reconstruct"]):
+                            valid_items = False
+                            manifest_details = f"Asset {a.get('asset_key')} violates provenance: AI reconstruction falsely claimed as authentic agency footage"
+                            break
+
+                    if valid_items:
+                        has_valid_manifest = True
+                        manifest_details = f"{len(assets_list)} assets verified with SHA-256 digests, documented origins, and explicit license terms"
             except Exception as e:
                 manifest_details = f"Manifest parse error: {e}"
 
         checks.append(
             QualityCheck(
                 check_name="ASSET_PROVENANCE_AND_LICENSING",
-                required="Complete asset provenance manifest with SHA-256 checksums and verified rights",
+                required="Complete asset provenance manifest with SHA-256 checksums, documented origins, and verified rights",
                 measured=manifest_details,
                 status="PASS" if has_valid_manifest else "FAIL",
             )
@@ -408,29 +421,38 @@ class QualityChecker:
         if not has_valid_manifest:
             all_passed = False
 
-        # 11. Human Editorial Approval Gate (Explicitly preventing self-assigned creative completion)
+        # 11. Human Editorial Approval Gate (Explicitly separate technical QA from publication authorization)
         checks.append(
             QualityCheck(
                 check_name="HUMAN_CREATIVE_APPROVAL_GATE",
-                required="Explicit review and approval by human editorial director before merging/publishing",
+                required="Explicit review and approval by human creative director before merging/publishing",
                 measured="PENDING_HUMAN_APPROVAL",
-                status="PASS",
-                details="System correctly flags pilot as requiring human sign-off.",
+                status="PENDING_APPROVAL",
+                details="Technical quality audit passed. Episode is held pending explicit human creative sign-off.",
             )
         )
 
         # Empirical Editorial Evaluation
         content_rating = self.evaluate_editorial_content(script, dur)
 
+        scientific_passed = any(c.check_name == "SCIENTIFIC_CLAIM_HYGIENE" and c.status == "PASS" for c in checks)
+        rights_passed = has_valid_manifest
+
         report = QualityReport(
             report_id=f"qr_{episode_id}",
             episode_id=episode_id,
+            technical_qa_passed=all_passed,
+            scientific_qa_passed=scientific_passed,
+            rights_cleared=rights_passed,
             passed_all_mandatory_checks=all_passed,
+            publication_approval_status="PENDING_HUMAN_APPROVAL",
+            publication_authorized=False,
             checks=checks,
             content_rating=content_rating,
         )
 
         logger.info(
-            f"Quality report for {episode_id}: {'PASSED ALL CHECKS' if all_passed else 'FAILED CHECKS'}"
+            f"Quality report for {episode_id}: Technical QA {'PASSED' if all_passed else 'FAILED'} | "
+            f"Release Status: {report.publication_approval_status}"
         )
         return report

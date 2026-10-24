@@ -96,8 +96,11 @@ class PilotRunner:
         for k in sorted(assets.keys()):
             hasher.update(k.encode("utf-8"))
             hasher.update(assets[k].read_bytes())
-        # Track subtitle format & motion engine version
-        hasher.update(b"v2.5_narration_driven_timing_and_snell_refraction")
+        # Track audio, subtitle, rendering, and manifest dependencies
+        hasher.update(b"tts_rate_14.5%_real_word_boundaries_v3.0")
+        hasher.update(b"subtitles_ass_margin_v_460_safe_zone_y_1460")
+        hasher.update(b"motion_engine_cinematic_hybrid_snell_refraction_v3")
+        hasher.update(b"provenance_manifest_schema_v2")
         return hasher.hexdigest()
 
     async def run_full_pilot(self, force_regenerate: bool = False) -> Path:
@@ -151,7 +154,7 @@ class PilotRunner:
         speech_res = await self.audio_narrator.synthesize_speech(
             script=script,
             output_wav_path=narration_wav,
-            rate="+11%",
+            rate="+14%",
         )
         measured_dur = speech_res.duration
         word_segments = speech_res.segments
@@ -159,8 +162,8 @@ class PilotRunner:
         words_data = speech_res.words
 
         logger.info(
-            f"Authoritative speech synthesized: {measured_dur:.2f}s across {len(sentence_events)} "
-            f"sentences and {len(words_data)} aligned words."
+            f"Authoritative speech synthesized ({speech_res.synchronization_type}): {measured_dur:.2f}s across "
+            f"{len(sentence_events)} sentences and {len(words_data)} aligned words."
         )
 
         # Align script section boundaries directly to spoken speech
@@ -270,8 +273,8 @@ class PilotRunner:
                 output_mp4=clip2_path,
                 duration=s2_dur,
                 camera_mode="ARCHIVAL_TELEMETRY_PAN",
-                branding_badge="BEYOND 80 // ARCHIVE",
-                scientific_label="VOYAGER 2 FLYBY // 1989",
+                branding_badge="BEYOND 80 // RECONSTRUCTION",
+                scientific_label="VOYAGER 2 TRAJECTORY // 1989 ARCHIVE DATA",
             )
         else:
             logger.info(f"Reusing verified rendered Scene 2 clip: {clip2_path.name}")
@@ -281,8 +284,8 @@ class PilotRunner:
                 start_time=s2_start,
                 end_time=s2_end,
                 duration=s2_dur,
-                asset_type="ARCHIVAL_DOCUMENTARY",
-                asset_source="NASA_JPL_Voyager2_Encounter_Archive",
+                asset_type="AI_ARTISTIC_RECONSTRUCTION",
+                asset_source="AI_Reconstruction_Voyager2_Trajectory",
                 local_file_path=str(clip2_path.resolve()),
                 motion_effect="ARCHIVAL_TELEMETRY_PAN",
                 overlay_title="VOYAGER 2 // INTERNAL HEAT PUZZLE",
@@ -464,7 +467,7 @@ class PilotRunner:
                 },
                 {
                     "citation": "Pearl, J. C. & Conrath, B. J. The albedo, effective temperature, and energy balance of Neptune, as determined from Voyager data. Journal of Geophysical Research 96, 18921–18930 (1991).",
-                    "doi": "https://doi.org/10.1029/91JA02078",
+                    "doi": "https://doi.org/10.1029/91JA01087",
                     "verified_finding": "Voyager 2 measured Neptune's emitted-to-absorbed energy ratio to be approximately 2.611 ± 0.282.",
                     "distinction": "In-situ spacecraft radiometer observation.",
                 },
@@ -520,6 +523,8 @@ class PilotRunner:
                     "optical_effect": "3D octahedral crystal rotation with Blinn-Phong specular glints and prismatic caustics",
                 },
             ],
+            "synchronization_method": speech_res.synchronization_type,
+            "narration_to_caption_alignment": SubtitleGenerator.verify_narration_alignment(script.full_text, word_segments)[1],
             "caption_alignment": {
                 "total_segments": len(word_segments),
                 "average_words_per_segment": round(len(script.full_text.split()) / max(1, len(word_segments)), 1),
@@ -609,13 +614,13 @@ class PilotRunner:
                 "relative_path": rel_path(assets["02_voyager"]),
                 "source_project_path": f"assets/episode_001/{assets['02_voyager'].name}",
                 "sha256": hashlib.sha256(assets["02_voyager"].read_bytes()).hexdigest(),
-                "asset_nature": "AUTHENTIC_DOCUMENTARY_AND_TELEMETRY",
-                "description": "Authentic NASA Voyager 2 probe model combined with 1989 infrared radiometer thermal anomaly scanner telemetry insert",
-                "creator_or_rights_holder": "NASA / JPL-Caltech (Public Domain) & Beyond 80 Compositing",
-                "verified_license": "NASA Public Domain / Commercial Editorial Use Permitted",
+                "asset_nature": "AI_GENERATED_ARTISTIC_RECONSTRUCTION",
+                "description": "Photorealistic AI-generated artistic reconstruction of Voyager 2 approaching Neptune based on authentic 1989 flight trajectory models and radiometer measurements (Pearl & Conrath 1991)",
+                "creator_or_rights_holder": "Beyond 80 Production Team (AI Generative Model based on NASA flight path)",
+                "verified_license": "Proprietary Commercial Production Rights (Subject to AI Model Commercial Terms)",
                 "commercial_use_cleared": True,
                 "attribution_required": True,
-                "attribution_text": "Imagery courtesy of NASA / JPL-Caltech (Voyager 2 Encounter Archive)",
+                "attribution_text": "AI-generated artistic reconstruction based on published NASA Voyager 2 flight path and radiometer data (Pearl & Conrath 1991). Not authentic onboard photography.",
                 "date_generated": "2026-10-24",
                 "transformations_applied": "Subtle CRT horizontal telemetry scanline overlay, slow archival drift pan",
             },

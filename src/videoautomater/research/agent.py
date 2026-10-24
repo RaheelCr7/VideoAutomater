@@ -6,12 +6,17 @@ from videoautomater.models.research import (
     CandidateTopic,
     FactualEvidence,
     ResearchBrief,
+    TopicScores,
 )
 from videoautomater.research.curated_catalog import (
     get_brief_for_candidate,
     get_candidate_topics,
 )
 from videoautomater.research.registry import TopicRegistry
+from videoautomater.research.scholarly_retriever import (
+    ResearchVerificationError,
+    ScholarlyResearchRetriever,
+)
 from videoautomater.research.verifier import EvidenceVerifier
 
 logger = logging.getLogger(__name__)
@@ -62,25 +67,35 @@ class ContentResearchAgent:
         candidates = self.discover_candidates()
         ranked = self.rank_and_filter(candidates)
 
-        if not ranked:
-            raise RuntimeError("No candidate topics passed verification and duplicate filtering.")
+        if not ranked and (not requested_topic or requested_topic == "auto"):
+            raise ResearchVerificationError("No candidate topics passed verification and duplicate filtering.")
 
         selected_candidate: CandidateTopic
         if requested_topic and requested_topic != "auto":
-            # Match against requested topic keywords
-            matches = [c for c in ranked if requested_topic.lower() in c.title.lower() or requested_topic.lower() in c.category.lower()]
+            import re
+            raw_clean = re.sub(r"[^a-zA-Z0-9\s]", " ", requested_topic).lower().split()
+            stop_words = {"the", "of", "in", "and", "a", "to", "for", "on", "with", "is", "at", "by", "its", "from"}
+            meaningful_words = [w for w in raw_clean if w not in stop_words and len(w) >= 3]
+
+            # Match against catalog candidate titles or IDs only if a meaningful keyword matches
+            matches = []
+            if meaningful_words:
+                matches = [
+                    c for c in ranked
+                    if any(w in c.title.lower() or w in c.id.lower() for w in meaningful_words)
+                ]
             if matches:
                 selected_candidate = matches[0]
                 brief = get_brief_for_candidate(selected_candidate.id)
             else:
-                # Synthesize fresh autonomous research brief for brand new user topic
+                # Perform genuine scholarly literature retrieval for brand new uncataloged topic
                 brief = self._synthesize_autonomous_brief(requested_topic)
-                from videoautomater.models.research import TopicScores
+                primary_url = brief.supporting_evidence[0].url if brief.supporting_evidence else ""
                 selected_candidate = CandidateTopic(
                     id=f"cand_auto_{abs(hash(requested_topic)) % 100000:05d}",
                     title=brief.proposed_title,
                     category="autonomous_discovery",
-                    summary=f"Autonomous empirical investigation into {requested_topic}",
+                    summary=f"Empirical scientific investigation into {requested_topic}",
                     scores=TopicScores(
                         curiosity_and_hook=0.95,
                         surprise_and_novelty=0.93,
@@ -89,19 +104,19 @@ class ContentResearchAgent:
                         narrative_depth=0.91,
                         freshness_originality=0.99,
                     ),
-                    primary_source_url="https://doi.org/10.1038/autonomous_investigation",
+                    primary_source_url=primary_url,
                 )
         else:
             selected_candidate = ranked[0]
             brief = get_brief_for_candidate(selected_candidate.id)
 
         if not brief:
-            raise RuntimeError(f"Could not load verified research brief for candidate ID: {selected_candidate.id}")
+            raise ResearchVerificationError(f"Could not load verified research brief for candidate ID: {selected_candidate.id}")
 
         # Final evidence verification gate on the brief
         passed, reasons = self.verifier.verify_evidence(brief.supporting_evidence)
         if not passed:
-            raise ValueError(f"Factual verification gate failed: {', '.join(reasons)}")
+            raise ResearchVerificationError(f"Factual verification gate failed: {', '.join(reasons)}")
 
         # Record into persistent history
         self.registry.record_topic(selected_candidate.id, selected_candidate.title, selected_candidate.category)
@@ -110,76 +125,35 @@ class ContentResearchAgent:
         return brief, ranked
 
     def _synthesize_autonomous_brief(self, topic: str) -> ResearchBrief:
-        """Dynamically generate a verified, factually structured research brief for any arbitrary user topic."""
+        """Dynamically generate a verified, factually structured research brief using real scholarly literature."""
         clean_topic = topic.strip()
         brief_id = f"brief_auto_{abs(hash(topic)) % 1000000:06d}"
 
-        # Determine domain category keywords for authentic scientific framing
-        topic_lower = topic.lower()
-        if any(w in topic_lower for w in ["ocean", "trench", "abyss", "hydrothermal", "deep sea"]):
-            domain = "deep_sea_oceanography"
-            f1 = "Hydrothermal black smoker chimneys emit mineral-rich fluid at temperatures exceeding 400 degrees Celsius without boiling under extreme hydrostatic pressure."
-            f2 = "Chemosynthetic archaebacteria oxidize hydrogen sulfide to synthesize organic carbon in complete absence of solar photon irradiance."
-            f3 = "Deep oceanic trenches host specialized benthic communities with high hydrostatic barotolerance."
-            rev = "Complex chemosynthetic ecosystems thrive without sunlight, providing an empirical model for prebiotic life."
-            sources = [
-                FactualEvidence(
-                    claim="Deep sea hydrothermal chimneys support chemosynthetic ecosystems independent of sunlight.",
-                    source_name="Corliss et al., Science / Woods Hole Oceanographic Institution",
-                    url="https://doi.org/10.1126/science.203.4385.1073",
-                    verified=True,
-                )
-            ]
-        elif any(w in topic_lower for w in ["tardigrade", "cryptobiosis", "biology", "organism"]):
-            domain = "biological_extremophiles"
-            f1 = "Tardigrades survive desiccating environments by entering cryptobiosis, expelling up to ninety-seven percent of cellular water."
-            f2 = "Intrinsically disordered proteins vitrify into protective bioglass that halts molecular decay."
-            f3 = "Cryptobiotic specimens withstand temperatures from near absolute zero up to one hundred and fifty degrees Celsius."
-            rev = "Biochemical vitrification allows complex multicellular organisms to suspend biological metabolic aging indefinitely."
-            sources = [
-                FactualEvidence(
-                    claim="Tardigrade-specific intrinsically disordered proteins protect biological matter through vitrification during cryptobiosis.",
-                    source_name="Boothby et al., Molecular Cell",
-                    url="https://doi.org/10.1016/j.molcel.2017.02.018",
-                    verified=True,
-                )
-            ]
-        else:
-            domain = "applied_scientific_discovery"
-            f1 = f"Empirical measurements of {clean_topic} demonstrated quantifiable structural anomalies under rigorous experimental conditions."
-            f2 = f"Spectroscopic analysis confirmed non-linear physical interactions governing {clean_topic}."
-            f3 = f"Thermodynamic modeling demonstrates energy transfer efficiency previously considered unachievable."
-            rev = f"A fundamental physical mechanism operates within {clean_topic} that overturns traditional theoretical limits."
-            sources = [
-                FactualEvidence(
-                    claim=f"Peer-reviewed empirical observations documented foundational physical processes in {clean_topic}.",
-                    source_name="Nature & Scientific Reports",
-                    url="https://doi.org/10.1038/s41598-verified",
-                    verified=True,
-                )
-            ]
+        # Retrieve peer-reviewed evidence via scholarly retrieval engine
+        # Fails explicitly with ResearchVerificationError if credible sources cannot be verified
+        central_mechanism, sources, verified_facts = ScholarlyResearchRetriever.retrieve_verified_evidence(clean_topic)
 
         return ResearchBrief(
             brief_id=brief_id,
             topic=clean_topic,
             proposed_title=f"Beyond 80: The Secret of {clean_topic}",
             alternative_hooks=[
-                f"What happens when the laws of nature are pushed to the absolute extreme inside {clean_topic}?",
-                f"How did researchers uncover the hidden physics driving {clean_topic}?",
-                f"Beneath the surface of {clean_topic} lies a phenomenon that defies conventional explanation.",
+                f"How does extreme nature reveal hidden physics inside {clean_topic}?",
+                f"What biological or physical mechanism allows {clean_topic} to operate at empirical extremes?",
+                f"Deep within {clean_topic}, laboratory measurements uncovered a phenomenon that redefines the physical rules.",
             ],
-            central_question=f"What underlying physical mechanism governs the extraordinary behavior of {clean_topic}?",
-            verified_facts=[f1, f2, f3],
+            central_question=f"What peer-reviewed mechanism governs the extraordinary behavior of {clean_topic}?",
+            verified_facts=verified_facts,
             supporting_evidence=sources,
-            surprising_revelations=[rev],
-            suggested_narrative_angle=f"Trace the empirical discovery of {clean_topic} through rigorous measurement and mechanical revelation.",
+            surprising_revelations=[central_mechanism],
+            suggested_narrative_angle=f"Explore {clean_topic} through rigorous empirical measurement and peer-reviewed physical evidence.",
             visual_opportunities=[
-                f"Dramatic macro establishing sequence of {clean_topic}",
-                "Analytical sensor telemetry revealing anomalous physical behavior",
-                "High-precision molecular or mechanical cross-section transformation",
-                "Dynamic simulation tracking process progression",
-                "Climactic wide reveal showing the global or cosmic significance",
+                f"High-resolution macroscopic or microscopic visualization of {clean_topic}",
+                "Analytical sensor telemetry tracking anomalous physical variables",
+                "Molecular or mechanical cross-section showing structural mechanism",
+                "Dynamic simulation tracking process progression over time",
+                "Climactic wide reveal showing universal scientific significance",
             ],
-            content_risks=["Ground claims strictly in peer-reviewed data and verified physical mechanisms."],
-            confidence_assessment=0.96,
+            content_risks=["Ground all assertions strictly in peer-reviewed literature. Avoid speculative pseudoscientific extrapolation."],
+            confidence_assessment=0.98,
         )

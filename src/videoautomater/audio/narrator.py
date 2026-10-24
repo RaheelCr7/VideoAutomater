@@ -17,11 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 class SpeechSynthesisResult(tuple):
-    """Backwards-compatible tuple (duration, segments) with sentence and word boundary attributes."""
+    """Backwards-compatible tuple (duration, segments) with sentence, word boundary, and sync type attributes."""
     duration: float
     segments: list[SubtitleSegment]
     sentence_events: list[tuple[float, float, str]]
     words: list[SubtitleWord]
+    synchronization_type: str
 
     def __new__(
         cls,
@@ -29,12 +30,14 @@ class SpeechSynthesisResult(tuple):
         segments: list[SubtitleSegment],
         sentence_events: list[tuple[float, float, str]],
         words: list[SubtitleWord],
+        synchronization_type: str = "NEURAL_TTS_WORD_BOUNDARIES",
     ):
         obj = super().__new__(cls, (duration, segments))
         obj.duration = duration
         obj.segments = segments
         obj.sentence_events = sentence_events
         obj.words = words
+        obj.synchronization_type = synchronization_type
         return obj
 
 
@@ -51,7 +54,7 @@ class AudioNarrator:
         output_wav_path: Path,
         rate: str | None = None,
     ) -> SpeechSynthesisResult:
-        """Synthesize script text using Edge-TTS and capture word timestamps."""
+        """Synthesize script text using Edge-TTS with authentic word-boundary timestamps."""
         output_wav_path.parent.mkdir(parents=True, exist_ok=True)
         temp_mp3 = output_wav_path.with_suffix(".temp.mp3")
 
@@ -61,9 +64,9 @@ class AudioNarrator:
             voice=self.voice,
             rate=speech_rate,
             volume="+0%",
+            boundary="WordBoundary",
         )
 
-        sentence_events: list[tuple[float, float, str]] = []
         words_data: list[SubtitleWord] = []
 
         try:
@@ -71,10 +74,6 @@ class AudioNarrator:
                 async for chunk in communicate.stream():
                     if chunk["type"] == "audio":
                         f.write(chunk["data"])
-                    elif chunk["type"] == "SentenceBoundary":
-                        start_sec = chunk["offset"] / 10_000_000.0
-                        dur_sec = chunk["duration"] / 10_000_000.0
-                        sentence_events.append((round(start_sec, 3), round(start_sec + dur_sec, 3), chunk["text"]))
                     elif chunk["type"] == "WordBoundary":
                         start_sec = chunk["offset"] / 10_000_000.0
                         dur_sec = chunk["duration"] / 10_000_000.0
@@ -109,16 +108,37 @@ class AudioNarrator:
         duration = self._get_audio_duration(output_wav_path)
 
         from videoautomater.visuals.subtitles import SubtitleGenerator
-        if sentence_events:
-            segments = SubtitleGenerator.segment_transcript(sentence_events)
-            logger.info(f"Synthesized neural narration: {duration:.2f}s with {len(sentence_events)} sentences and {len(segments)} short caption segments.")
+
+        sentence_events: list[tuple[float, float, str]] = []
+        if words_data:
+            # Map section boundaries directly to exact spoken word spans
+            curr_w_idx = 0
+            for sec in script.sections:
+                sec_words = [w for w in sec.narration_text.split() if w.strip()]
+                w_count = len(sec_words)
+                if curr_w_idx < len(words_data):
+                    s_start = words_data[curr_w_idx].start_time
+                    end_idx = min(curr_w_idx + w_count - 1, len(words_data) - 1)
+                    s_end = words_data[end_idx].end_time
+                    sentence_events.append((s_start, s_end, sec.narration_text))
+                    curr_w_idx = end_idx + 1
+
+            # Build subtitle segments directly from real TTS word boundaries
+            segments = SubtitleGenerator.segment_words(words_data)
+            sync_type = "NEURAL_TTS_WORD_BOUNDARIES"
+            logger.info(
+                f"Synthesized neural narration with real word boundaries: {duration:.2f}s, "
+                f"{len(words_data)} words, {len(segments)} segments."
+            )
         else:
-            # Fallback to section timings
+            # Pacing estimation fallback
             section_events = [(sec.timeline_start, sec.timeline_end, sec.narration_text) for sec in script.sections]
             segments = SubtitleGenerator.segment_transcript(section_events)
-            logger.info(f"Synthesized narration: {duration:.2f}s with {len(segments)} section-derived caption segments.")
+            sentence_events = section_events
+            sync_type = "ESTIMATED_OFFLINE_FALLBACK"
+            logger.warning("No TTS word boundaries emitted. Used estimated pacing fallback.")
 
-        return SpeechSynthesisResult(duration, segments, sentence_events, words_data)
+        return SpeechSynthesisResult(duration, segments, sentence_events, words_data, sync_type)
 
     def _get_audio_duration(self, audio_path: Path) -> float:
         """Read duration of an audio file in seconds."""

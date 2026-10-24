@@ -26,6 +26,21 @@ TRUSTED_SOURCE_DOMAINS = {
     "si.edu",
     "usgs.gov",
     "cern.ch",
+    "doi.org",
+    "crossref.org",
+    "cell.com",
+    "pnas.org",
+    "iaea.org",
+}
+
+import re
+
+DOI_REGEX = re.compile(r"^https?://(dx\.)?doi\.org/10\.\d{4,9}/[-._;()/:A-Za-z0-9]+$")
+DISALLOWED_DOI_SUBSTRINGS = {"s41598-verified", "autonomous_investigation", "example", "placeholder", "fake"}
+GENERIC_TEMPLATE_PHRASES = {
+    "quantifiable structural anomalies",
+    "non-linear physical interactions governing",
+    "energy transfer efficiency previously considered unachievable",
 }
 
 
@@ -59,12 +74,22 @@ class EvidenceVerifier:
 
         errors = []
         for idx, ev in enumerate(evidence_list):
-            if not ev.claim or len(ev.claim.strip()) < 15:
-                errors.append(f"Evidence #{idx+1} claim is too short or empty.")
+            claim_text = (ev.claim or "").strip()
+            if len(claim_text) < 20:
+                errors.append(f"Evidence #{idx+1} claim is too short or empty (min 20 characters required).")
+            elif any(phrase in claim_text for phrase in GENERIC_TEMPLATE_PHRASES):
+                errors.append(f"Evidence #{idx+1} contains generic fabricated template phrasing.")
+
             if not ev.url or not ev.url.startswith("http"):
                 errors.append(f"Evidence #{idx+1} URL '{ev.url}' is invalid or missing.")
-            elif not cls.is_trusted_domain(ev.url):
-                # We log warning or require authoritative domain
-                pass  # Allow generic verified URLs if reputable, but check format
+            else:
+                # Check for DOI validity if URL is a DOI
+                if "doi.org" in ev.url:
+                    if not DOI_REGEX.match(ev.url):
+                        errors.append(f"Evidence #{idx+1} DOI URL '{ev.url}' does not conform to valid DOI syntax.")
+                    if any(bad in ev.url.lower() for bad in DISALLOWED_DOI_SUBSTRINGS):
+                        errors.append(f"Evidence #{idx+1} contains placeholder or fabricated DOI: '{ev.url}'.")
+                elif not cls.is_trusted_domain(ev.url):
+                    errors.append(f"Evidence #{idx+1} URL domain is untrusted: '{ev.url}'.")
 
         return len(errors) == 0, errors

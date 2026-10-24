@@ -52,7 +52,7 @@ VERIFIED_CANDIDATES: list[dict] = [
                 {
                     "claim": "Voyager 2 radiometer measurements determined Neptune's total energy balance ratio to be 2.611 ± 0.282.",
                     "source_name": "Pearl & Conrath, J. Geophys. Res. (1991)",
-                    "url": "https://doi.org/10.1029/91JA02078",
+                    "url": "https://doi.org/10.1029/91JA01087",
                     "verified": True,
                 },
             ],
