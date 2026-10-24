@@ -19,7 +19,13 @@ app = typer.Typer(
 console = Console()
 
 
-@app.command()
+@app.callback()
+def main_callback():
+    """VideoAutomater: Autonomous AI Video Creation & Multi-Platform Publishing System."""
+    pass
+
+
+@app.command("generate")
 def generate(
     duration: float = typer.Option(80.0, "--duration", "-d", help="Target video duration in seconds (default: 80.0)"),
     topic: str = typer.Option("auto", "--topic", "-t", help="Topic query or 'auto' for autonomous discovery"),
