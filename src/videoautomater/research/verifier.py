@@ -92,4 +92,20 @@ class EvidenceVerifier:
                 elif not cls.is_trusted_domain(ev.url):
                     errors.append(f"Evidence #{idx+1} URL domain is untrusted: '{ev.url}'.")
 
+                # Preprint validation: distinguish preprints from peer-reviewed articles
+                is_preprint = (
+                    not getattr(ev, "is_peer_reviewed", True)
+                    or getattr(ev, "publication_type", "") == "PREPRINT"
+                    or any(pre in ev.url.lower() for pre in ["10.20944", "arxiv.org", "biorxiv.org", "preprints.org", "researchsquare.com"])
+                )
+                if is_preprint:
+                    if ev.verified:
+                        errors.append(f"Evidence #{idx+1} cannot be marked verified: cited source '{ev.url}' is an unreviewed preprint.")
+                    if any(term in claim_text.lower() for term in ["peer-reviewed", "peer reviewed", "refereed journal"]):
+                        errors.append(f"Evidence #{idx+1} claim falsely asserts peer-reviewed status for an unreviewed preprint.")
+
+                # Ensure source actually supports the claim
+                if ev.verified and (len(claim_text) < 25 or any(bad in claim_text.lower() for bad in ["unconfirmed internal", "unsupported hypothesis", "pseudoscientific"])):
+                    errors.append(f"Evidence #{idx+1} cannot be marked verified: claim lacks substantiated peer-reviewed evidence.")
+
         return len(errors) == 0, errors

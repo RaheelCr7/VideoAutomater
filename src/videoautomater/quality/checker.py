@@ -314,24 +314,25 @@ class QualityChecker:
                 if not sub_compliant:
                     all_passed = False
 
-                # 7. Actual narrated words versus captions coverage check
+                # 7. Ordered Transcript-to-Caption Sequence Verification (Non-set, sequence-preserving)
                 if script and script.full_text:
-                    script_words = re.findall(r"\b[a-zA-Z0-9]+\b", script.full_text.lower())
+                    import difflib
+                    script_tokens = [w.lower() for w in re.findall(r"\b[a-zA-Z0-9]+\b", script.full_text)]
                     clean_sub_text = re.sub(r"\{.*?\}", "", sub_text).replace(r"\N", " ").replace(r"\n", " ")
-                    sub_words = re.findall(r"\b[a-zA-Z0-9]+\b", clean_sub_text.lower())
-                    # Check coverage ratio
-                    script_set = set(script_words)
-                    sub_set = set(sub_words)
-                    matched_vocab = script_set.intersection(sub_set)
-                    coverage_ratio = len(matched_vocab) / max(1, len(script_set))
-                    coverage_pass = coverage_ratio >= 0.92
+                    sub_tokens = [w.lower() for w in re.findall(r"\b[a-zA-Z0-9]+\b", clean_sub_text)]
+
+                    matcher = difflib.SequenceMatcher(None, script_tokens, sub_tokens)
+                    ordered_matched_count = sum(block.size for block in matcher.get_matching_blocks())
+                    ordered_coverage_ratio = round(ordered_matched_count / max(1, len(script_tokens)), 4)
+                    coverage_pass = ordered_coverage_ratio >= 0.92
+
                     checks.append(
                         QualityCheck(
                             check_name="NARRATED_WORDS_VS_CAPTIONS_COVERAGE",
-                            required="Subtitle captions must cover >= 92% of script vocabulary with zero dropped lines",
-                            measured=f"Matched vocabulary: {len(matched_vocab)}/{len(script_set)} ({coverage_ratio*100:.1f}%)",
+                            required="Subtitle captions must cover >= 92% of script transcript in strict chronological sequence order",
+                            measured=f"{ordered_coverage_ratio * 100:.2f}% ({ordered_matched_count}/{len(script_tokens)} ordered tokens)",
                             status="PASS" if coverage_pass else "FAIL",
-                            details="Verified word completeness across spoken dialogue and rendered captions.",
+                            details=f"Ordered transcript-to-caption sequence alignment: {ordered_matched_count} of {len(script_tokens)} words verified in temporal order without line drops.",
                         )
                     )
                     if not coverage_pass:

@@ -1,11 +1,17 @@
 """
-Beyond 80 - Scientifically Modeled Relativistic Optics & 3D Gravitational Lensing Engine
+Beyond 80 - Scientifically Modeled Relativistic Optics & Numerical Gravitational Lensing Engine
 
 Implements physically consistent light-ray trajectories by numerically integrating
 Schwarzschild null geodesics, validated against established analytical benchmarks:
 1. Bozza (2002) strong-field deflection analytical limit (range of validity: 0 < b/b_crit - 1 << 1)
 2. Einstein (1915) & Darwin (1959) weak-field post-Newtonian expansions (range of validity: b >> b_crit)
 3. Direct numerical integration of the Schwarzschild null geodesic Binet equation for all b > b_crit.
+
+Simulation Methodology:
+Light deflection angles are numerically integrated and verified against analytical GR.
+Accretion disk visualization (Doppler beaming delta^4, Keplerian orbital motion, gravitational redshift)
+and celestial background distortion are rendered using screen-space projection approximations,
+clearly distinguished from full 3D curved-spacetime volumetric ray tracing.
 
 Scientific Equations & Constants:
 1. Schwarzschild Metric Line Element:
@@ -294,8 +300,8 @@ class RelativisticOpticsEngine:
         font_small = self._get_font(22)
         font_mono = self._get_font(20)
 
-        draw.text((80, 120), "BEYOND 80 // GENERAL RELATIVISTIC OPTICS", fill=(0, 210, 255), font=font_large)
-        draw.text((80, 160), "SCHWARZSCHILD NULL GEODESIC RAY TRACER (NUMERICALLY INTEGRATED / BOZZA VALIDATED)", fill=(180, 200, 220), font=font_small)
+        draw.text((80, 120), "BEYOND 80 // NUMERICAL SCHWARZSCHILD DEFLECTION", fill=(0, 210, 255), font=font_large)
+        draw.text((80, 160), "LIGHT TRAJECTORY: NUMERICAL GEODESIC INTEGRATION  |  DISK & STARFIELD: SCREEN-SPACE MODEL", fill=(180, 200, 220), font=font_small)
 
         # Bottom HUD telemetry
         y_hud = self.height - 340
@@ -414,6 +420,10 @@ class RelativisticOpticsEngine:
         report = {
             "title": "Schwarzschild Null Geodesic Numerical Physics Validation Report",
             "spacetime_metric": "Schwarzschild (Static spherically symmetric null geodesics)",
+            "simulation_methodology": {
+                "light_deflection": "Numerically integrated Schwarzschild null geodesics (Binet equation d^2u/dphi^2 + u = 3Mu^2). Validated against Bozza (2002) strong-field limit and Einstein weak-field limit.",
+                "visual_rendering": "Hybrid relativistic projection: light deflection angles are numerically exact; accretion disk kinematics (Doppler beaming delta^4, Keplerian velocity, gravitational redshift) and celestial background are modeled in screen-space coordinates, clearly distinguished from full 3D curved-spacetime volumetric ray tracing.",
+            },
             "equations": {
                 "metric_line_element": "ds^2 = -(1 - 2M/r) dt^2 + (1 - 2M/r)^(-1) dr^2 + r^2 dΩ^2",
                 "critical_impact_parameter": "b_crit = 3*sqrt(3)*M ≈ 5.1961524 M",
@@ -474,7 +484,7 @@ class RelativisticOpticsEngine:
         font_header = self._get_font(28)
         font_caption = self._get_font(20)
 
-        draw.text((30, 25), "BEYOND 80 // SCENE-BY-SCENE VISUAL CONTACT SHEET", fill=(0, 210, 255), font=font_header)
+        draw.text((30, 25), "BEYOND 80 // SCENE CONTACT SHEET (NUMERICAL DEFLECTION & RELATIVISTIC PROJECTION)", fill=(0, 210, 255), font=font_header)
 
         for idx, thumb in enumerate(thumbnails):
             r = idx // cols

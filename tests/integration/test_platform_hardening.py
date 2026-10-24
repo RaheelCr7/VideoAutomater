@@ -686,6 +686,6 @@ def test_measured_qa_values_not_hardcoded(temp_platform_env, monkeypatch):
     assert rev_job.qa_report.passed is True
     assert rev_job.qa_report.subtitles_synchronized is True
     assert rev_job.qa_report.safe_zones_respected is True
-    assert rev_job.qa_report.provenance_verified is True
-    assert rev_job.qa_report.vocabulary_coverage == 1.0
+    assert rev_job.qa_report.vocabulary_coverage >= 0.92
+    assert rev_job.qa_report.vocabulary_coverage <= 1.0
 

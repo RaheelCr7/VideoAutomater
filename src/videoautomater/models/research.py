@@ -35,6 +35,8 @@ class FactualEvidence(BaseModel):
     source_name: str
     url: str
     verified: bool = True
+    is_peer_reviewed: bool = True
+    publication_type: str = "PEER_REVIEWED_JOURNAL"
 
 
 class CandidateTopic(BaseModel):

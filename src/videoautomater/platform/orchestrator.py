@@ -597,7 +597,13 @@ class ProductionOrchestrator:
             safe_zones_pass = bool(safe_zone_check and safe_zone_check.status == "PASS")
 
             vocab_check = next((c for c in qa_res.checks if c.check_name in ["NARRATED_WORDS_VS_CAPTIONS_COVERAGE", "VOCABULARY_AND_TRANSCRIPT_COVERAGE"]), None)
-            vocab_cov = 1.0 if (vocab_check and vocab_check.status == "PASS") else 0.0
+            vocab_cov = 0.0
+            if vocab_check and vocab_check.measured:
+                match = re.search(r"([\d\.]+)%", vocab_check.measured)
+                if match:
+                    vocab_cov = round(float(match.group(1)) / 100.0, 4)
+                elif vocab_check.status == "PASS":
+                    vocab_cov = 1.0
 
             prov_check = next((c for c in qa_res.checks if c.check_name in ["ASSET_PROVENANCE_AND_LICENSING", "ASSET_PROVENANCE_AND_RIGHTS"]), None)
             prov_verified = bool(prov_check and prov_check.status == "PASS")
@@ -922,7 +928,13 @@ class ProductionOrchestrator:
         safe_zones_pass = bool(safe_zone_check and safe_zone_check.status == "PASS")
 
         vocab_check = next((c for c in qa_res.checks if c.check_name in ["NARRATED_WORDS_VS_CAPTIONS_COVERAGE", "VOCABULARY_AND_TRANSCRIPT_COVERAGE"]), None)
-        vocab_cov = 1.0 if (vocab_check and vocab_check.status == "PASS") else 0.0
+        vocab_cov = 0.0
+        if vocab_check and vocab_check.measured:
+            match = re.search(r"([\d\.]+)%", vocab_check.measured)
+            if match:
+                vocab_cov = round(float(match.group(1)) / 100.0, 4)
+            elif vocab_check.status == "PASS":
+                vocab_cov = 1.0
 
         prov_check = next((c for c in qa_res.checks if c.check_name in ["ASSET_PROVENANCE_AND_LICENSING", "ASSET_PROVENANCE_AND_RIGHTS"]), None)
         prov_verified = bool(prov_check and prov_check.status == "PASS")
