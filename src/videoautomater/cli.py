@@ -137,6 +137,38 @@ def test_10s(
     )
 
 
+@app.command("pilot")
+def pilot(
+    output: str = typer.Option("output/episode_001", "--output", "-o", help="Directory for 80-second pilot output"),
+):
+    """Generate the complete 80-second Beyond 80 master pilot episode."""
+    from videoautomater.orchestration.pilot_runner import PilotRunner
+
+    console.print(
+        Panel.fit(
+            f"[bold cyan]Beyond 80 // Master Pilot Production (80 Seconds)[/bold cyan]\n"
+            f"[dim]Producing Episode 001: The Secret Inside the Ice Giants...[/dim]",
+            border_style="cyan",
+        )
+    )
+
+    runner = PilotRunner(output_dir=Path(output))
+    with console.status("[bold green]Executing full 80-second documentary production workflow...", spinner="dots"):
+        pilot_path = asyncio.run(runner.run_full_pilot())
+
+    console.print(
+        Panel.fit(
+            f"[bold green]Beyond 80 Pilot Rendered Successfully![/bold green]\n"
+            f"[bold]Master Video:[/bold] {pilot_path}\n"
+            f"[bold]Contact Sheet:[/bold] {pilot_path.parent / 'pilot_contact_sheet.jpg'}\n"
+            f"[bold]Quality Report:[/bold] {pilot_path.parent / 'quality_report.json'}\n"
+            f"[bold]Timeline Report:[/bold] {pilot_path.parent / 'animation_timeline.json'}\n"
+            f"[bold]Licensing Manifest:[/bold] {pilot_path.parent / 'asset_licensing_manifest.json'}",
+            border_style="green",
+        )
+    )
+
+
 def main():
     app()
 

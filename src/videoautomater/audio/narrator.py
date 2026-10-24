@@ -27,15 +27,17 @@ class AudioNarrator:
         self,
         script: StoryScript,
         output_wav_path: Path,
+        rate: str | None = None,
     ) -> tuple[float, list[SubtitleSegment]]:
         """Synthesize script text using Edge-TTS and capture word timestamps."""
         output_wav_path.parent.mkdir(parents=True, exist_ok=True)
         temp_mp3 = output_wav_path.with_suffix(".temp.mp3")
 
+        speech_rate = rate or ("+11%" if script.total_spoken_words > 140 else "+0%")
         communicate = edge_tts.Communicate(
             text=script.full_text,
             voice=self.voice,
-            rate="+0%",
+            rate=speech_rate,
             volume="+0%",
         )
 
@@ -117,29 +119,54 @@ class AudioNarrator:
         return duration, segments
 
     def generate_ambient_music(self, duration: float, output_path: Path) -> Path:
-        """Synthesize a subtle, cinematic space-synth ambient track for background mixing."""
+        """Synthesize a rich, cinematic ambient documentary soundscape with harmonic resolution outro."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
         sample_rate = 48000
         total_samples = int(sample_rate * duration)
         t = np.linspace(0, duration, total_samples, endpoint=False)
 
-        # Ambient drone: warm low pad (55Hz A1, 110Hz A2, 165Hz E3 harmonic) with slow modulation
-        lfo = 0.5 + 0.5 * np.sin(2 * np.pi * 0.1 * t)
-        drone = (
-            0.15 * np.sin(2 * np.pi * 55 * t)
-            + 0.10 * np.sin(2 * np.pi * 110 * t + 0.2)
-            + 0.05 * np.sin(2 * np.pi * 164.81 * t + 0.4) * lfo
+        # 1. Low cinematic drone (A1: 55Hz, A2: 110Hz, E3: 164.81Hz) with slow breathing LFO
+        lfo_slow = 0.5 + 0.5 * np.sin(2 * np.pi * 0.08 * t)
+        lfo_mid = 0.5 + 0.5 * np.sin(2 * np.pi * 0.15 * t + 0.5)
+
+        drone_low = 0.16 * np.sin(2 * np.pi * 55.0 * t) + 0.11 * np.sin(2 * np.pi * 110.0 * t + 0.2)
+        drone_mid = 0.07 * np.sin(2 * np.pi * 164.81 * t + 0.4) * lfo_slow
+        drone_high = 0.04 * np.sin(2 * np.pi * 220.0 * t + 0.7) * lfo_mid
+
+        # 2. Celestial shimmering texture (overtone bells modulated)
+        shimmer = 0.02 * np.sin(2 * np.pi * 440.0 * t + np.sin(2 * np.pi * 0.5 * t)) * lfo_slow
+        sub_bass = 0.12 * np.sin(2 * np.pi * 27.5 * t)  # Sub-audible atmospheric weight (A0: 27.5 Hz)
+
+        full_bed = drone_low + drone_mid + drone_high + shimmer + sub_bass
+
+        # 3. Outro resolution cadence: In the final 8 seconds, swell a warm resolution chord (Aadd9)
+        outro_start = max(0.0, duration - 8.0)
+        outro_mask = np.clip((t - outro_start) / 4.0, 0.0, 1.0)
+        resolution_chord = (
+            0.08 * np.sin(2 * np.pi * 110.0 * t)
+            + 0.06 * np.sin(2 * np.pi * 164.81 * t)
+            + 0.05 * np.sin(2 * np.pi * 220.0 * t)
+            + 0.03 * np.sin(2 * np.pi * 277.18 * t)  # C# major 3rd warmth
+        ) * outro_mask
+
+        combined = full_bed + resolution_chord
+
+        # 4. Smooth dynamic envelopes: Gentle 1.5s fade-in, and elegant 1.2s cosine fade-out at end
+        fade_in = np.minimum(1.0, t / 1.5)
+        # Squeeze fade-out only into the final 1.2 seconds so the ending chord resonates
+        tail_start = max(0.0, duration - 1.2)
+        fade_out = np.where(
+            t < tail_start,
+            1.0,
+            0.5 + 0.5 * np.cos(np.pi * (t - tail_start) / 1.2),
         )
 
-        # Soft fade in (2s) and fade out (3s)
-        fade_in = np.minimum(1.0, t / 2.0)
-        fade_out = np.minimum(1.0, (duration - t) / 3.0)
-        ambient_track = drone * fade_in * fade_out
+        ambient_track = combined * fade_in * fade_out
 
-        # Normalize to -22 dB
+        # Normalize to target music level (-20 dB)
         max_amp = np.max(np.abs(ambient_track))
         if max_amp > 0:
-            target_amp = 10 ** (settings.music_volume_db / 20.0)
+            target_amp = 10 ** ((settings.music_volume_db + 2.0) / 20.0)
             ambient_track = (ambient_track / max_amp) * target_amp
 
         sf.write(str(output_path), ambient_track, sample_rate)
@@ -152,15 +179,16 @@ class AudioNarrator:
         output_mixed_path: Path,
         target_duration: float = 80.0,
     ) -> Path:
-        """Mix voiceover and background music, applying EBU R128 loudness normalization to -14 LUFS."""
+        """Mix voiceover and background music with dynamic sidechain ducking and EBU R128 normalization."""
         output_mixed_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Build FFmpeg filtergraph:
-        # Pad or trim narration to target_duration, mix with music, apply loudnorm
+        # Dynamic sidechain compression:
+        # Music ducks smoothly under active speech and naturally swells up during pauses and outro
         filter_complex = (
             f"[0:a]apad=whole_dur={target_duration}[voice];"
-            f"[1:a]atrim=0:{target_duration},volume=-6dB[bg];"
-            f"[voice][bg]amix=inputs=2:duration=first:dropout_transition=2,"
+            f"[1:a]atrim=0:{target_duration}[bg_trimmed];"
+            f"[bg_trimmed][voice]sidechaincompress=threshold=0.08:ratio=3.5:attack=50:release=350[ducked_bg];"
+            f"[voice][ducked_bg]amix=inputs=2:duration=first:dropout_transition=0,"
             f"loudnorm=I={settings.target_lufs}:TP=-1.5:LRA=11[out]"
         )
 

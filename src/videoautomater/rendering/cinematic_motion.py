@@ -84,10 +84,37 @@ class CinematicMotionEngine:
                 progress = frame_idx / max(1, total_frames - 1)
                 t = frame_idx / self.fps
 
-                # Smooth cinematic camera float: sinusoidal ease-in-out drift
-                # Prevents harsh linear pans or repetitive harsh zooms
-                drift_x = int((0.5 - 0.5 * math.cos(progress * math.pi)) * (max_dx * 0.8))
-                drift_y = int((0.5 - 0.5 * math.cos(progress * math.pi * 0.7)) * (max_dy * 0.6))
+                # Camera kinematics based on shot direction mode
+                mode_upper = camera_mode.upper()
+                if "PLUNGE" in mode_upper:
+                    # Inward acceleration plunge with micro-turbulence
+                    turb = int(2.5 * math.sin(t * 22.0) * (1.0 - progress * 0.5))
+                    drift_x = int(progress * max_dx * 0.9) + turb
+                    drift_y = int(progress * max_dy * 0.9) + turb
+                elif "ARCHIVAL" in mode_upper or "TELEMETRY" in mode_upper:
+                    # Slow, deliberate archival horizontal telemetry drift
+                    drift_x = int((0.5 - 0.5 * math.cos(progress * math.pi * 0.8)) * max_dx)
+                    drift_y = int(max_dy * 0.3 + 8.0 * math.sin(t * 0.8))
+                elif "DESCENT" in mode_upper:
+                    # Downward gravitational tracking through planetary mantle
+                    drift_x = int(max_dx * 0.5 + (max_dx * 0.25) * math.sin(progress * math.pi))
+                    drift_y = int(progress * max_dy)
+                elif "PULLBACK" in mode_upper:
+                    # Majestic cosmic pull-back: easing from deep crop outwards
+                    ease_out = 1.0 - math.pow(1.0 - progress, 2.5)
+                    drift_x = int((1.0 - ease_out) * (max_dx * 0.7))
+                    drift_y = int((1.0 - ease_out) * (max_dy * 0.7))
+                elif "CRYSTALLINE" in mode_upper or "REVEAL" in mode_upper:
+                    # Elegant orbital float around crystalline subject
+                    drift_x = int((0.5 + 0.5 * math.sin(progress * math.pi * 1.2)) * (max_dx * 0.8))
+                    drift_y = int((0.5 - 0.5 * math.cos(progress * math.pi * 0.9)) * (max_dy * 0.7))
+                else:
+                    # Default CINEMATIC_FLOAT
+                    drift_x = int((0.5 - 0.5 * math.cos(progress * math.pi)) * (max_dx * 0.8))
+                    drift_y = int((0.5 - 0.5 * math.cos(progress * math.pi * 0.7)) * (max_dy * 0.6))
+
+                drift_x = max(0, min(max_dx, drift_x))
+                drift_y = max(0, min(max_dy, drift_y))
 
                 # Crop view window
                 frame_img = base_img.crop((drift_x, drift_y, drift_x + self.width, drift_y + self.height))
@@ -95,6 +122,13 @@ class CinematicMotionEngine:
                 # Subtle atmospheric breathing: micro-contrast pulse (0.98 - 1.03)
                 contrast_factor = 1.0 + 0.025 * math.sin(t * 1.4)
                 frame_img = ImageEnhance.Contrast(frame_img).enhance(contrast_factor)
+
+                # Optional mode-specific optical enhancements
+                if "ARCHIVAL" in mode_upper:
+                    # Extremely subtle documentary film grain & telemetry scan
+                    draw_arch = ImageDraw.Draw(frame_img, "RGBA")
+                    scan_y = int((t * 260) % self.height)
+                    draw_arch.line([(0, scan_y), (self.width, scan_y)], fill=(0, 215, 255, 22), width=1)
 
                 # Draw minimal branding and scientific label overlays
                 self._apply_editorial_overlays(frame_img, branding_badge, scientific_label, t)
@@ -355,46 +389,77 @@ class CinematicMotionEngine:
         logger.info(f"Rendered multi-stage transformation clip {output_mp4.name} ({output_mp4.stat().st_size / (1024*1024):.2f} MB).")
         return output_mp4
 
+    def _apply_optical_shockwave_refraction(
+        self, frame: Image.Image, cx: int, cy: int, shock_r: float, amp: float = 14.0
+    ) -> Image.Image:
+        """Apply Snell-like optical shockwave refraction distortion to image pixels."""
+        if shock_r < 25 or shock_r > 1200:
+            return frame
+        x0 = max(0, int(cx - shock_r - 70))
+        x1 = min(self.width, int(cx + shock_r + 70))
+        y0 = max(0, int(cy - shock_r - 70))
+        y1 = min(self.height, int(cy + shock_r + 70))
+        bw, bh = x1 - x0, y1 - y0
+        if bw <= 0 or bh <= 0:
+            return frame
+
+        arr = np.array(frame)
+        patch = arr[y0:y1, x0:x1]
+
+        y, x = np.ogrid[:bh, :bw]
+        rx = (x + x0) - cx
+        ry = (y + y0) - cy
+        r = np.hypot(rx, ry)
+        r_safe = np.maximum(r, 1e-4)
+
+        # Refractive ripple: Gaussian-damped Snell lens distortion
+        sigma = 35.0
+        ripple = amp * np.sin(0.12 * (r - shock_r)) * np.exp(-((r - shock_r) / sigma) ** 2)
+
+        dx = (rx / r_safe) * ripple
+        dy = (ry / r_safe) * ripple
+
+        map_x = np.clip(x + dx, 0, bw - 1).astype(np.int32)
+        map_y = np.clip(y + dy, 0, bh - 1).astype(np.int32)
+
+        # Refract patch with chromatic dispersion
+        refracted = patch.copy()
+        refracted[:, :, 0] = patch[np.clip(y + dy * 1.15, 0, bh - 1).astype(np.int32), np.clip(x + dx * 1.15, 0, bw - 1).astype(np.int32), 0]
+        refracted[:, :, 1] = patch[map_y, map_x, 1]
+        refracted[:, :, 2] = patch[np.clip(y + dy * 0.85, 0, bh - 1).astype(np.int32), np.clip(x + dx * 0.85, 0, bw - 1).astype(np.int32), 2]
+
+        arr[y0:y1, x0:x1] = refracted
+        return Image.fromarray(arr)
+
     def _draw_hydrocarbon_dissociation_layer(
         self,
         base_frame: Image.Image,
         stage_progress: float,
         t: float,
     ) -> Image.Image:
-        """Render molecular bond oscillation, hyperbaric shockwaves, and covalent bond rupture."""
+        """Render coherent molecular transformation: optical shockwave refraction, 3D bond vibration and rupture."""
+        # Center coordinates for molecular core
+        cx = 540
+        cy = 820 + int(18 * math.sin(t * 2.0))
+
+        # 1. Optical shockwave refraction directly warping the background image
+        shock_phase = (stage_progress * 2.2) % 1.0
+        shock_r = float(140 + shock_phase * 720)
+        amp = float(max(0.0, 16.0 * (1.0 - shock_phase)))
+        warped_frame = self._apply_optical_shockwave_refraction(base_frame, cx, cy, shock_r, amp)
+
         overlay = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay, "RGBA")
 
-        # Center coordinates for molecular core
-        cx = 540
-        cy = 820 + int(20 * math.sin(t * 2.0))
-
-        # Hyperbaric shockwave compression wave (expanding spherical wavefronts)
-        shock_phase = (stage_progress * 2.5) % 1.0
-        shock_r = int(120 + shock_phase * 750)
-        shock_alpha = int(max(0, 140 * (1.0 - shock_phase)))
-        if shock_alpha > 5:
-            draw.ellipse(
-                [cx - shock_r, cy - shock_r, cx + shock_r, cy + shock_r],
-                outline=(100, 220, 255, shock_alpha),
-                width=max(2, int(6 * (1.0 - shock_phase))),
-            )
-            inner_r = max(10, shock_r - 60)
-            draw.ellipse(
-                [cx - inner_r, cy - inner_r, cx + inner_r, cy + inner_r],
-                outline=(255, 180, 50, int(shock_alpha * 0.6)),
-                width=2,
-            )
-
-        # 4 hydrogen atoms positioned tetrahedrally around central carbon
+        # 4 hydrogen atoms in 3D tetrahedral projection
         angles = [0.85, 2.25, 3.90, 5.30]
         base_dist = 175.0
 
         # Covalent bond vibration (18 Hz)
         vib_freq = 18.0 * (1.0 + stage_progress)
-        vib_offset = 6.0 * math.sin(t * vib_freq * math.pi)
+        vib_offset = 5.0 * math.sin(t * vib_freq * math.pi)
 
-        # Bond rupture begins around stage_progress > 0.40 (speech: 'tear hydrocarbon molecules apart')
+        # Covalent bond rupture begins around stage_progress > 0.40
         if stage_progress < 0.40:
             sep_factor = 0.0
         else:
@@ -406,26 +471,26 @@ class CinematicMotionEngine:
             hx = cx + int(dist * math.cos(angle))
             hy = cy + int(dist * math.sin(angle))
 
-            # Draw covalent bond cylinder or electric snapping arc
+            # 3D Covalent bond: cylindrical beam with energy core
             if sep_factor < 120:
                 bond_w = max(2, int(8 * (1.0 - sep_factor / 150.0)))
                 draw.line([(cx, cy), (hx, hy)], fill=(80, 210, 255, 190), width=bond_w)
                 draw.line([(cx, cy), (hx, hy)], fill=(255, 255, 255, 220), width=max(1, bond_w // 2))
             elif sep_factor < 260:
-                # Electric micro-arcs snapping between carbon and separating hydrogen
+                # Organic plasma discharge filaments across breaking bonds
                 arc_points = [(cx, cy)]
-                steps = 5
+                steps = 6
                 for step in range(1, steps):
                     frac = step / steps
-                    mid_x = cx + int(frac * (hx - cx)) + int(18 * math.sin(t * 30 + step * 2))
-                    mid_y = cy + int(frac * (hy - cy)) + int(18 * math.cos(t * 30 + step * 2))
+                    mid_x = cx + int(frac * (hx - cx)) + int(16 * math.sin(t * 32 + step * 2.3))
+                    mid_y = cy + int(frac * (hy - cy)) + int(16 * math.cos(t * 32 + step * 2.3))
                     arc_points.append((mid_x, mid_y))
                 arc_points.append((hx, hy))
                 for ap_idx in range(len(arc_points) - 1):
                     draw.line([arc_points[ap_idx], arc_points[ap_idx + 1]], fill=(140, 240, 255, 220), width=3)
                     draw.line([arc_points[ap_idx], arc_points[ap_idx + 1]], fill=(255, 255, 255, 240), width=1)
 
-            # Hydrogen atom sphere (white core with cyan diffuse glow)
+            # Volumetric 3D Hydrogen Sphere (white core + specular Phong highlight + cyan diffuse halo)
             hr = 26
             if sep_factor > 20:
                 wake_len = min(80, int(sep_factor * 0.4))
@@ -433,21 +498,23 @@ class CinematicMotionEngine:
                 wy = hy - int(wake_len * math.sin(angle))
                 draw.line([(wx, wy), (hx, hy)], fill=(0, 200, 255, 90), width=10)
 
-            draw.ellipse([hx - hr - 12, hy - hr - 12, hx + hr + 12, hy + hr + 12], fill=(0, 210, 255, 60))
-            draw.ellipse([hx - hr, hy - hr, hx + hr, hy + hr], fill=(220, 245, 255, 240))
-            draw.ellipse([hx - 8, hy - 10, hx - 2, hy - 4], fill=(255, 255, 255, 255))
+            # Diffuse glow & volumetric gradient
+            draw.ellipse([hx - hr - 14, hy - hr - 14, hx + hr + 14, hy + hr + 14], fill=(0, 210, 255, 55))
+            draw.ellipse([hx - hr, hy - hr, hx + hr, hy + hr], fill=(225, 245, 255, 240))
+            # 3D Specular highlight
+            draw.ellipse([hx - 9, hy - 11, hx - 2, hy - 4], fill=(255, 255, 255, 255))
 
-        # Central Carbon Atom Core
+        # Central Carbon Atom Core (heated under hyperbaric shock)
         cr = 46
         core_heat = min(1.0, stage_progress * 1.2)
         r_col = int(20 + 200 * core_heat)
         g_col = int(180 + 70 * (1.0 - core_heat))
         b_col = int(255 * (1.0 - 0.4 * core_heat))
-        draw.ellipse([cx - cr - 24, cy - cr - 24, cx + cr + 24, cy + cr + 24], fill=(r_col, g_col, b_col, 50))
+        draw.ellipse([cx - cr - 26, cy - cr - 26, cx + cr + 26, cy + cr + 26], fill=(r_col, g_col, b_col, 50))
         draw.ellipse([cx - cr, cy - cr, cx + cr, cy + cr], fill=(r_col, g_col, b_col, 220))
         draw.ellipse([cx - cr + 10, cy - cr + 8, cx - cr + 26, cy - cr + 24], fill=(255, 255, 255, 230))
 
-        return Image.alpha_composite(base_frame.convert("RGBA"), overlay).convert("RGB")
+        return Image.alpha_composite(warped_frame.convert("RGBA"), overlay).convert("RGB")
 
     def _draw_carbon_nucleation_layer(
         self,

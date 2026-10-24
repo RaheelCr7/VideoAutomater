@@ -77,259 +77,150 @@ class AnimationDirectorAgent:
         narration = section.narration_text
         duration = end_time - start_time
 
-        # 1. Determine visual type and concept dynamically based on narrative role and text
-        if role in ("HOOK", "MYSTERY") or scene_index == 1:
-            visual_type = VisualType.CINEMATIC_ESTABLISHING
-            template_name = "celestial_approach"
-            visual_obj = f"Establish planetary scale and atmospheric presence for {topic}"
-            concept = "Atmospheric entry and scale visualization"
-            camera = CameraMotion(
-                movement_type="DOLLY_ZOOM",
-                start_zoom=1.0,
-                end_zoom=1.25,
-                focal_x=540.0,
-                focal_y=750.0,
-            )
-            objects = [
-                AnimationObject(
-                    object_id="planet_body",
-                    name="Planetary Disk",
-                    role="PRIMARY_SUBJECT",
-                    initial_scale=1.0,
-                    target_scale=1.25,
-                    position=(540.0, 750.0),
-                    color="#D4A373",
-                ),
-                AnimationObject(
-                    object_id="spacecraft_probe",
-                    name="Exploration Probe",
-                    role="SECONDARY_INDICATOR",
-                    initial_scale=0.4,
-                    target_scale=0.9,
-                    position=(300.0, 450.0),
-                    color="#00D7FF",
-                ),
-            ]
-            events = [
-                AnimationEvent(
-                    event_id=f"ev_{scene_index}_1",
-                    start_time=start_time + 0.5,
-                    end_time=start_time + (duration * 0.6),
-                    trigger_words="beneath outer clouds",
-                    action="APPROACH",
-                    target_object_id="spacecraft_probe",
-                    description="Spacecraft approaches upper atmosphere trajectory arc",
-                    parameters={"speed_factor": 1.4},
-                ),
-                AnimationEvent(
-                    event_id=f"ev_{scene_index}_2",
-                    start_time=start_time + (duration * 0.5),
-                    end_time=end_time,
-                    trigger_words="atmosphere becomes visible",
-                    action="HIGHLIGHT",
-                    target_object_id="planet_body",
-                    description="Atmospheric haze layers illuminate under solar lighting",
-                    parameters={"glow_intensity": 1.8},
-                ),
-            ]
-            labels = [
-                OnScreenLabel(
-                    label_id=f"lbl_{scene_index}_1",
-                    text=f"SCIENTIFIC OBSERVATION: {topic.upper()}",
-                    position=(540.0, 220.0),
-                    start_time=start_time + 0.8,
-                    end_time=end_time - 0.5,
-                    font_size=32,
-                    color="#FFD700",
-                )
-            ]
+        # 1. Determine domain and category dynamically
+        cat = getattr(research_brief, "category", "general").lower()
+        topic_lower = topic.lower()
 
-        elif role in ("ESCALATION", "EXPLANATION") or ("pressure" in narration.lower() or "depth" in narration.lower()):
+        is_space = cat == "space" or any(w in topic_lower for w in ["neptune", "jupiter", "planet", "ice giant", "galaxy", "orbit", "solar"])
+        is_nuclear = cat == "science" or any(w in topic_lower for w in ["oklo", "nuclear", "reactor", "fission", "uranium", "atom", "quantum"])
+        is_deepsea = cat == "discoveries" or any(w in topic_lower for w in ["mariana", "trench", "ocean", "chimney", "abyss", "hydrothermal"])
+
+        if is_space:
+            # Domain: Space & Planetary Physics
+            if (role in ("HOOK", "MYSTERY") or scene_index == 1) and "pressure" not in narration.lower():
+                visual_type = VisualType.CINEMATIC_ESTABLISHING
+                template_name = "celestial_approach"
+                visual_obj = f"Establish planetary scale and atmospheric entry for {topic}"
+                concept = "Planetary atmospheric plunge and high-orbit scale"
+                camera = CameraMotion(movement_type="DOLLY_ZOOM", start_zoom=1.0, end_zoom=1.25, focal_x=540.0, focal_y=750.0)
+                objects = [
+                    AnimationObject(object_id="planet_disk", name="Planetary Disk", role="PRIMARY_SUBJECT", initial_scale=1.0, target_scale=1.25, position=(540.0, 750.0), color="#1E90FF"),
+                    AnimationObject(object_id="spacecraft_voyager", name="NASA Voyager 2 Probe", role="SECONDARY_INDICATOR", initial_scale=0.5, target_scale=0.9, position=(280.0, 420.0), color="#E0E6ED"),
+                ]
+                events = [
+                    AnimationEvent(event_id=f"ev_{scene_index}_1", start_time=start_time + 0.5, end_time=end_time, trigger_words="violent storms", action="APPROACH", target_object_id="spacecraft_voyager", description="Spacecraft camera dives into cloud deck bands", parameters={"speed": 1.3}),
+                ]
+                labels = [
+                    OnScreenLabel(label_id=f"lbl_{scene_index}_1", text="NASA VOYAGER 2 // ICE GIANT ENCOUNTER", position=(540.0, 220.0), start_time=start_time + 0.8, end_time=end_time - 0.4, font_size=28, color="#00D7FF"),
+                ]
+            elif role in ("ESCALATION", "EXPLANATION") or ("pressure" in narration.lower() or "depth" in narration.lower()):
+                visual_type = VisualType.EXPLANATORY_PROCESS
+                template_name = "pressure_depth_gauge"
+                visual_obj = "Illustrate crushing planetary pressure and atmospheric compression gradient"
+                concept = "Hydrostatic compression & thermodynamic gradient"
+                camera = CameraMotion(movement_type="TRACKING", start_zoom=1.0, end_zoom=1.1, pan_dy=120.0, focal_x=540.0, focal_y=700.0)
+                objects = [
+                    AnimationObject(object_id="depth_indicator", name="Depth Meter", role="PRIMARY_SUBJECT", position=(540.0, 650.0), color="#FF9E00"),
+                    AnimationObject(object_id="gas_particles", name="Atmospheric Methane & Hydrogen Particles", role="SECONDARY_INDICATOR", position=(540.0, 850.0), color="#00F0FF"),
+                ]
+                events = [
+                    AnimationEvent(event_id=f"ev_{scene_index}_1", start_time=start_time + 0.6, end_time=end_time - 0.5, trigger_words="pressure heat", action="COMPRESS", target_object_id="gas_particles", description="Gas density increases 100,000x as depth crosses 10,000 km", parameters={"compression_ratio": 100000.0}),
+                ]
+                labels = [
+                    OnScreenLabel(label_id=f"lbl_{scene_index}_1", text="PRESSURE: 100,000 ATMOSPHERES", position=(540.0, 250.0), start_time=start_time + 1.0, end_time=end_time - 0.4, font_size=34, color="#FF453A"),
+                    OnScreenLabel(label_id=f"lbl_{scene_index}_2", text="DEPTH: 10,000 KM INTERIOR", position=(540.0, 310.0), start_time=start_time + 1.5, end_time=end_time - 0.4, font_size=30, color="#E0E6ED"),
+                ]
+            elif role in ("REVELATION", "CLIMAX") or ("crystalliz" in narration.lower() or "laser" in narration.lower() or "molecular" in narration.lower() or "shockwave" in narration.lower()):
+                visual_type = VisualType.STRUCTURAL_TRANSFORMATION
+                template_name = "molecular_crystallization"
+                visual_obj = "Show pyrolysis of methane molecules and phase transition into diamond crystal lattice"
+                concept = "Molecular dissociation and carbon lattice crystallization"
+                camera = CameraMotion(movement_type="ORBIT", start_zoom=1.05, end_zoom=1.3, focal_x=540.0, focal_y=720.0)
+                objects = [
+                    AnimationObject(object_id="hydrocarbon_molecule", name="CH4 Hydrocarbon Precursor", role="PRIMARY_SUBJECT", position=(540.0, 720.0), color="#30D158"),
+                    AnimationObject(object_id="diamond_lattice", name="Tetrahedral Diamond Crystal Unit Cell", role="PRIMARY_SUBJECT", initial_alpha=0.0, target_alpha=1.0, position=(540.0, 720.0), color="#FFFFFF"),
+                ]
+                events = [
+                    AnimationEvent(event_id=f"ev_{scene_index}_1", start_time=start_time + 0.4, end_time=start_time + (duration * 0.45), trigger_words="molecules shattered", action="DISSOCIATE", target_object_id="hydrocarbon_molecule", description="Laser shockwave breaks covalent C-H bonds", parameters={"bond_energy_ev": 4.5}),
+                    AnimationEvent(event_id=f"ev_{scene_index}_2", start_time=start_time + (duration * 0.45), end_time=end_time - 0.3, trigger_words="diamond crystals", action="CRYSTALIZE", target_object_id="diamond_lattice", description="Carbon atoms lock into tetrahedral diamond lattice", parameters={"pressure_gpa": 150.0}),
+                ]
+                labels = [
+                    OnScreenLabel(label_id=f"lbl_{scene_index}_1", text="SLAC EXPERIMENT // 150 GPa LASER SHOCKWAVE", position=(540.0, 250.0), start_time=start_time + 0.8, end_time=end_time - 0.4, font_size=28, color="#00D7FF"),
+                ]
+            else:
+                visual_type = VisualType.SCIENTIFIC_CROSS_SECTION
+                template_name = "diamond_precipitation"
+                visual_obj = "Illustrate solid diamond hail sinking through supercritical fluid mantle"
+                concept = "Gravitational precipitation and friction heating"
+                camera = CameraMotion(movement_type="PAN", start_zoom=1.0, end_zoom=1.15, pan_dy=140.0, focal_x=540.0, focal_y=750.0)
+                objects = [
+                    AnimationObject(object_id="diamond_hail", name="Descending Diamond Hailstones", role="PRIMARY_SUBJECT", position=(540.0, 680.0), color="#E0F7FA"),
+                    AnimationObject(object_id="supercritical_mantle", name="Supercritical Water & Ammonia Mantle", role="BACKGROUND_CONTEXT", position=(540.0, 1000.0), color="#0A1128"),
+                ]
+                events = [
+                    AnimationEvent(event_id=f"ev_{scene_index}_1", start_time=start_time + 0.5, end_time=end_time - 0.4, trigger_words="falling like hail", action="PRECIPITATE", target_object_id="diamond_hail", description="Diamond crystals sink releasing gravitational thermal energy", parameters={"velocity_kms": 12.0}),
+                ]
+                labels = [
+                    OnScreenLabel(label_id=f"lbl_{scene_index}_1", text="SUPERCRITICAL MANTLE // THERMAL CONVECTION", position=(540.0, 240.0), start_time=start_time + 0.5, end_time=end_time - 0.4, font_size=28, color="#FFD700"),
+                ]
+
+        elif is_nuclear:
+            # Domain: Nuclear Physics & Geology (e.g. Oklo Natural Reactor)
+            if role in ("HOOK", "MYSTERY") or scene_index == 1:
+                visual_type = VisualType.CINEMATIC_ESTABLISHING
+                template_name = "geological_descent"
+                visual_obj = f"Establish ancient geological formation and location for {topic}"
+                concept = "Precambrian stratigraphy and isotopic discovery"
+                camera = CameraMotion(movement_type="TRACKING", start_zoom=1.0, end_zoom=1.2, pan_dy=100.0, focal_x=540.0, focal_y=750.0)
+                objects = [
+                    AnimationObject(object_id="geological_bedrock", name="Precambrian Francevillian Basin", role="PRIMARY_SUBJECT", position=(540.0, 750.0), color="#8B4513"),
+                    AnimationObject(object_id="uranium_deposit", name="Pitchblende Uranium Ore Vein", role="SECONDARY_INDICATOR", position=(540.0, 850.0), color="#32CD32"),
+                ]
+                events = [
+                    AnimationEvent(event_id=f"ev_{scene_index}_1", start_time=start_time + 0.5, end_time=end_time, trigger_words="nuclear reactor", action="ZOOM_TO_STRATA", target_object_id="uranium_deposit", description="Descent into subterranean pitchblende strata", parameters={"depth_meters": 120.0}),
+                ]
+                labels = [
+                    OnScreenLabel(label_id=f"lbl_{scene_index}_1", text="OKLO, GABON // 2 BILLION YEARS AGO", position=(540.0, 220.0), start_time=start_time + 0.8, end_time=end_time - 0.4, font_size=28, color="#00D7FF"),
+                ]
+            elif role in ("REVELATION", "ESCALATION"):
+                visual_type = VisualType.STRUCTURAL_TRANSFORMATION
+                template_name = "subatomic_fission"
+                visual_obj = "Show neutron moderation by groundwater and self-sustaining U-235 fission chain reaction"
+                concept = "Subatomic neutron moderation and controlled fission"
+                camera = CameraMotion(movement_type="ORBIT", start_zoom=1.1, end_zoom=1.35, focal_x=540.0, focal_y=720.0)
+                objects = [
+                    AnimationObject(object_id="u235_nucleus", name="Uranium-235 Nucleus", role="PRIMARY_SUBJECT", position=(540.0, 700.0), color="#00FF7F"),
+                    AnimationObject(object_id="water_moderator", name="Groundwater Molecule Moderator", role="SECONDARY_INDICATOR", position=(420.0, 680.0), color="#00BFFF"),
+                ]
+                events = [
+                    AnimationEvent(event_id=f"ev_{scene_index}_1", start_time=start_time + 0.4, end_time=start_time + (duration * 0.5), trigger_words="slowed neutrons down", action="MODERATE", target_object_id="water_moderator", description="Thermal neutrons slowed by hydrogen collisions", parameters={"energy_loss_pct": 98.0}),
+                    AnimationEvent(event_id=f"ev_{scene_index}_2", start_time=start_time + (duration * 0.5), end_time=end_time - 0.3, trigger_words="chain reactions", action="FISSION", target_object_id="u235_nucleus", description="Sustained induced nuclear fission split", parameters={"energy_release_mev": 200.0}),
+                ]
+                labels = [
+                    OnScreenLabel(label_id=f"lbl_{scene_index}_1", text="NATURAL U-235 FISSION // GROUNDWATER MODERATION", position=(540.0, 250.0), start_time=start_time + 0.8, end_time=end_time - 0.4, font_size=28, color="#32CD32"),
+                ]
+            else:
+                visual_type = VisualType.EXPLANATORY_PROCESS
+                template_name = "hydrothermal_cycle"
+                visual_obj = "Illustrate cyclic hydrothermal pulsing preventing nuclear meltdown"
+                concept = "Thermal geyser feedback loop and self-regulating shutdown"
+                camera = CameraMotion(movement_type="PAN", start_zoom=1.0, end_zoom=1.15, pan_dy=120.0, focal_x=540.0, focal_y=750.0)
+                objects = [
+                    AnimationObject(object_id="reactor_core", name="Natural Fossil Fission Zone", role="PRIMARY_SUBJECT", position=(540.0, 720.0), color="#FFD700"),
+                    AnimationObject(object_id="steam_plume", name="Hydrothermal Steam Venting", role="SECONDARY_INDICATOR", position=(540.0, 480.0), color="#F0F8FF"),
+                ]
+                events = [
+                    AnimationEvent(event_id=f"ev_{scene_index}_1", start_time=start_time + 0.5, end_time=end_time - 0.4, trigger_words="steam pushed the water out", action="VENT_STEAM", target_object_id="steam_plume", description="Steam expulsion safely shuts down reactor for 3 hours", parameters={"cycle_minutes": 180.0}),
+                ]
+                labels = [
+                    OnScreenLabel(label_id=f"lbl_{scene_index}_1", text="CYCLIC HYDROTHERMAL REGULATION // 150,000 YEARS", position=(540.0, 240.0), start_time=start_time + 0.5, end_time=end_time - 0.4, font_size=28, color="#FFD700"),
+                ]
+
+        else:
+            # Universal Domain Fallback
             visual_type = VisualType.EXPLANATORY_PROCESS
-            template_name = "pressure_depth_gauge"
-            visual_obj = "Illustrate crushing planetary pressure and atmospheric compression gradient"
-            concept = "Hydrostatic compression & thermodynamic gradient"
-            camera = CameraMotion(
-                movement_type="TRACKING",
-                start_zoom=1.0,
-                end_zoom=1.1,
-                pan_dy=120.0,
-                focal_x=540.0,
-                focal_y=700.0,
-            )
+            template_name = "empirical_investigation"
+            visual_obj = f"Demonstrate physical mechanism of {topic}"
+            concept = f"Scientific mechanism underlying {section.role.lower()}"
+            camera = CameraMotion(movement_type="PAN", start_zoom=1.0, end_zoom=1.15, pan_dy=100.0, focal_x=540.0, focal_y=750.0)
             objects = [
-                AnimationObject(
-                    object_id="depth_indicator",
-                    name="Depth Meter",
-                    role="PRIMARY_SUBJECT",
-                    position=(540.0, 650.0),
-                    color="#FF9E00",
-                ),
-                AnimationObject(
-                    object_id="gas_particles",
-                    name="Atmospheric Methane & Hydrogen Particles",
-                    role="SECONDARY_INDICATOR",
-                    position=(540.0, 850.0),
-                    color="#00F0FF",
-                ),
+                AnimationObject(object_id="core_subject", name=topic, role="PRIMARY_SUBJECT", position=(540.0, 720.0), color="#00D7FF"),
             ]
             events = [
-                AnimationEvent(
-                    event_id=f"ev_{scene_index}_1",
-                    start_time=start_time + 0.6,
-                    end_time=end_time - 0.5,
-                    trigger_words="pressure heat",
-                    action="COMPRESS",
-                    target_object_id="gas_particles",
-                    description="Gas density increases 100,000x as depth crosses 10,000 km",
-                    parameters={"compression_ratio": 100000.0},
-                )
+                AnimationEvent(event_id=f"ev_{scene_index}_1", start_time=start_time + 0.5, end_time=end_time - 0.4, trigger_words="discovery", action="ANALYZE", target_object_id="core_subject", description="Empirical examination of subject", parameters={}),
             ]
             labels = [
-                OnScreenLabel(
-                    label_id=f"lbl_{scene_index}_1",
-                    text="PRESSURE: 100,000 ATMOSPHERES",
-                    position=(540.0, 250.0),
-                    start_time=start_time + 1.0,
-                    end_time=end_time - 0.4,
-                    font_size=34,
-                    color="#FF453A",
-                ),
-                OnScreenLabel(
-                    label_id=f"lbl_{scene_index}_2",
-                    text="DEPTH: 10,000 KM INTERIOR",
-                    position=(540.0, 310.0),
-                    start_time=start_time + 1.5,
-                    end_time=end_time - 0.4,
-                    font_size=30,
-                    color="#E0E6ED",
-                ),
-            ]
-
-        elif role in ("REVELATION", "CLIMAX") or ("crystalliz" in narration.lower() or "laser" in narration.lower() or "molecular" in narration.lower() or "shockwave" in narration.lower()):
-            visual_type = VisualType.STRUCTURAL_TRANSFORMATION
-            template_name = "molecular_crystallization"
-            visual_obj = "Show pyrolysis of methane molecules and phase transition into diamond crystal lattice"
-            concept = "Molecular dissociation and carbon lattice crystallization"
-            camera = CameraMotion(
-                movement_type="ORBIT",
-                start_zoom=1.05,
-                end_zoom=1.3,
-                focal_x=540.0,
-                focal_y=720.0,
-            )
-            objects = [
-                AnimationObject(
-                    object_id="methane_molecule",
-                    name="CH4 Methane Precursor",
-                    role="PRIMARY_SUBJECT",
-                    position=(540.0, 720.0),
-                    color="#30D158",
-                ),
-                AnimationObject(
-                    object_id="diamond_lattice",
-                    name="Octahedral Crystalline Diamond",
-                    role="PRIMARY_SUBJECT",
-                    initial_alpha=0.0,
-                    target_alpha=1.0,
-                    position=(540.0, 720.0),
-                    color="#FFFFFF",
-                ),
-            ]
-            events = [
-                AnimationEvent(
-                    event_id=f"ev_{scene_index}_1",
-                    start_time=start_time + 0.4,
-                    end_time=start_time + (duration * 0.45),
-                    trigger_words="rips methane apart",
-                    action="DISSOCIATE",
-                    target_object_id="methane_molecule",
-                    description="Laser shockwave breaks covalent C-H bonds, releasing elemental carbon",
-                    parameters={"bond_break_energy_ev": 4.5},
-                ),
-                AnimationEvent(
-                    event_id=f"ev_{scene_index}_2",
-                    start_time=start_time + (duration * 0.45),
-                    end_time=end_time - 0.3,
-                    trigger_words="compressing into sparkling diamonds",
-                    action="CRYSTALIZE",
-                    target_object_id="diamond_lattice",
-                    description="Free carbon atoms snap into dense sp3 covalent tetrahedral diamond lattice",
-                    parameters={"density_g_cm3": 3.51},
-                ),
-            ]
-            labels = [
-                OnScreenLabel(
-                    label_id=f"lbl_{scene_index}_1",
-                    text="PHASE TRANSITION: CH4 -> C (DIAMOND)",
-                    position=(540.0, 260.0),
-                    start_time=start_time + 0.8,
-                    end_time=end_time - 0.3,
-                    font_size=32,
-                    color="#00D7FF",
-                )
-            ]
-
-        else:  # PAYOFF, RESOLUTION, or other
-            visual_type = VisualType.SCIENTIFIC_CROSS_SECTION
-            template_name = "diamond_precipitation"
-            visual_obj = "Illustrate solid diamond precipitation falling through planetary mantle layers"
-            concept = "Gravitational precipitation through fluid hydrogen mantle"
-            camera = CameraMotion(
-                movement_type="PAN",
-                start_zoom=1.0,
-                end_zoom=1.15,
-                pan_dy=150.0,
-                focal_x=540.0,
-                focal_y=750.0,
-            )
-            objects = [
-                AnimationObject(
-                    object_id="diamond_hail",
-                    name="Precipitating Diamonds",
-                    role="PRIMARY_SUBJECT",
-                    position=(540.0, 680.0),
-                    color="#E0F7FA",
-                ),
-                AnimationObject(
-                    object_id="metallic_hydrogen",
-                    name="Liquid Metallic Hydrogen Ocean",
-                    role="BACKGROUND_CONTEXT",
-                    position=(540.0, 1000.0),
-                    color="#0A1128",
-                ),
-            ]
-            events = [
-                AnimationEvent(
-                    event_id=f"ev_{scene_index}_1",
-                    start_time=start_time + 0.5,
-                    end_time=end_time - 0.4,
-                    trigger_words="falling like hail",
-                    action="PRECIPITATE",
-                    target_object_id="diamond_hail",
-                    description="Heavy solid diamond crystals precipitate downward through liquid hydrogen",
-                    parameters={"fall_velocity_kmh": 250.0},
-                )
-            ]
-            labels = [
-                OnScreenLabel(
-                    label_id=f"lbl_{scene_index}_1",
-                    text="DIAMOND RAIN PRECIPITATION",
-                    position=(540.0, 240.0),
-                    start_time=start_time + 0.5,
-                    end_time=end_time - 0.4,
-                    font_size=34,
-                    color="#FFD700",
-                ),
-                OnScreenLabel(
-                    label_id=f"lbl_{scene_index}_2",
-                    text="METALLIC HYDROGEN LAYER (20,000 KM)",
-                    position=(540.0, 300.0),
-                    start_time=start_time + 1.2,
-                    end_time=end_time - 0.4,
-                    font_size=28,
-                    color="#A0AEC0",
-                ),
+                OnScreenLabel(label_id=f"lbl_{scene_index}_1", text=f"EMPIRICAL INVESTIGATION: {topic.upper()}", position=(540.0, 240.0), start_time=start_time + 0.5, end_time=end_time - 0.4, font_size=28, color="#FFD700"),
             ]
 
         return SceneAnimationSpec(
