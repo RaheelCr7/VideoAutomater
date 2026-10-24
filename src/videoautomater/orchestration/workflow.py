@@ -142,9 +142,12 @@ class ProductionOrchestrator:
         # -------------------------------------------------------------
         # 6. EDITORIAL QUALITY VALIDATION
         # -------------------------------------------------------------
-        logger.info("Executing Phase 6: Editorial Quality & Technical Verification...")
-        quality_report = self.quality_checker.inspect_episode(episode_id, final_mp4)
-
+        quality_report = self.quality_checker.inspect_episode(
+            episode_id=episode_id,
+            video_path=final_mp4,
+            script=script,
+            subtitles_path=subtitles_ass,
+        )
         quality_file = ep_dir / "quality_report.json"
         quality_file.write_text(quality_report.model_dump_json(indent=2), encoding="utf-8")
 

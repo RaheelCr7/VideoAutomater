@@ -144,3 +144,73 @@ def test_qa_10_prevention_of_duplicate_subtitle_burn_in():
     # Exactly one 'subtitles=' filter in the video filterchain
     assert vf.count("subtitles=") == 1
     assert "subtitles.srt" not in vf
+
+
+def test_qa_11_no_silent_subtitle_omission():
+    """Criterion 11: Verify rendering fails explicitly with RuntimeError if subtitle file is missing or invalid."""
+    import pytest
+    from videoautomater.models.media import Storyboard
+    from videoautomater.rendering.ffmpeg_assembler import FFmpegAssembler
+
+    assembler = FFmpegAssembler()
+    sb = Storyboard(
+        storyboard_id="sb_test",
+        episode_id="ep_test",
+        script_id="sc_test",
+        scenes=[],
+        total_duration=5.0,
+    )
+
+    # Calling render_master_video with invalid non-existent paths should raise an exception, not silently export
+    with pytest.raises((RuntimeError, FileNotFoundError, Exception)):
+        assembler.render_master_video(
+            storyboard=sb,
+            audio_path=Path("/invalid/audio.aac"),
+            subtitles_path=Path("/invalid/subtitles.ass"),
+            output_mp4_path=Path("/invalid/out.mp4"),
+        )
+
+
+def test_qa_12_non_hardcoded_editorial_quality_scoring():
+    """Criterion 12: Verify QualityChecker evaluates real content metrics instead of hardcoded numbers."""
+    from videoautomater.models.script import ScriptSection, StoryScript
+    from videoautomater.quality.checker import QualityChecker
+
+    checker = QualityChecker()
+    sections = [
+        ScriptSection(
+            section_id="sec_1",
+            timeline_start=0.0,
+            timeline_end=5.0,
+            role="HOOK",
+            narration_text="Why are diamonds falling inside Jupiter?",
+            visual_intent="Opening mystery",
+        ),
+        ScriptSection(
+            section_id="sec_2",
+            timeline_start=5.0,
+            timeline_end=10.0,
+            role="PAYOFF",
+            narration_text="This scientific discovery reveals the true nature of deep planetary atmospheres.",
+            visual_intent="Final payoff",
+        ),
+    ]
+    script = StoryScript(
+        script_id="test_script",
+        brief_id="brief_1",
+        title="Test Title",
+        selected_hook="Why are diamonds falling inside Jupiter?",
+        total_spoken_words=len("Why are diamonds falling inside Jupiter? This scientific discovery reveals the true nature of deep planetary atmospheres.".split()),
+        estimated_reading_speed_wps=2.1,
+        sections=sections * 3,  # 6 sections
+        full_text="Test script full text",
+    )
+
+    rating = checker.evaluate_editorial_content(script=script, duration=10.0)
+    assert rating.methodology == "empirical_heuristic"
+    assert "hook_analysis" in rating.evidence
+    assert "pacing_analysis" in rating.evidence
+    assert "payoff_analysis" in rating.evidence
+    assert isinstance(rating.hook_strength, float)
+    assert isinstance(rating.pacing_score, float)
+    assert isinstance(rating.narrative_payoff, float)

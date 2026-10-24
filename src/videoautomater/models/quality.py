@@ -15,10 +15,12 @@ class QualityCheck(BaseModel):
 
 
 class ContentRating(BaseModel):
-    """Editorial content evaluation scores (1-10)."""
-    hook_strength: float = Field(ge=1.0, le=10.0, default=8.5)
-    pacing_score: float = Field(ge=1.0, le=10.0, default=8.5)
-    narrative_payoff: float = Field(ge=1.0, le=10.0, default=8.5)
+    """Editorial content evaluation scores (1-10) derived from empirical heuristics."""
+    hook_strength: float = Field(ge=1.0, le=10.0, default=7.0)
+    pacing_score: float = Field(ge=1.0, le=10.0, default=7.0)
+    narrative_payoff: float = Field(ge=1.0, le=10.0, default=7.0)
+    methodology: str = "empirical_heuristic"
+    evidence: dict[str, str] = Field(default_factory=dict)
 
 
 class QualityReport(BaseModel):

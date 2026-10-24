@@ -100,47 +100,11 @@ class FFmpegAssembler:
         logger.info(f"Executing FFmpeg render command to {output_mp4_path}...")
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode != 0:
-            logger.error(f"FFmpeg render failed:\n{res.stderr}")
-            # Try without subtitles filter in case fontconfig / libass is missing
-            fallback_vf = (
-                f"scale={self.width}:{self.height}:force_original_aspect_ratio=decrease,"
-                f"pad={self.width}:{self.height}:(ow-iw)/2:(oh-ih)/2,"
-                f"fps={self.fps},"
-                f"format=yuv420p"
+            logger.error(f"FFmpeg master render failed:\n{res.stderr}")
+            raise RuntimeError(
+                f"FFmpeg master video rendering failed with exit code {res.returncode}. "
+                f"Subtitle burn-in or stream assembly error: {res.stderr}"
             )
-            cmd_fallback = [
-                self.ffmpeg_bin,
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(concat_list_file),
-                "-i",
-                str(audio_path.resolve()),
-                "-vf",
-                fallback_vf,
-                "-c:v",
-                "libx264",
-                "-preset",
-                "ultrafast",
-                "-crf",
-                "20",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "192k",
-                "-ar",
-                "48000",
-                "-t",
-                f"{storyboard.total_duration:.2f}",
-                "-movflags",
-                "+faststart",
-                str(output_mp4_path.resolve()),
-            ]
-            subprocess.run(cmd_fallback, check=True, capture_output=True, text=True)
-            logger.info("Render completed using native fallback video filter.")
 
         logger.info(f"Master MP4 generated successfully: {output_mp4_path} ({output_mp4_path.stat().st_size / (1024*1024):.2f} MB)")
         return output_mp4_path
