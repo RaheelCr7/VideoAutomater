@@ -111,44 +111,22 @@ class VisualAssetGenerator:
             brightness = rng.randint(140, 255)
             draw.ellipse([px, py, px + size, py + size], fill=(brightness, brightness, brightness))
 
-        # 2. Category & Stage Badge (Top Safe Area: y=200px)
-        badge_font = self._get_font(28)
+        # 2. Category & Stage Badge (Top Safe Area: y=160px)
+        badge_font = self._get_font(24)
         badge_text = f"● {category.upper()} // {role}"
-        draw.rounded_rectangle([center_x - 220, 220, center_x + 220, 280], radius=30, fill=(0, 0, 0, 160), outline=(255, 255, 255, 120), width=2)
-        draw.text((center_x, 250), badge_text, fill=(240, 240, 255), font=badge_font, anchor="mm")
+        draw.rounded_rectangle(
+            [center_x - 180, 160, center_x + 180, 210],
+            radius=25,
+            fill=(0, 0, 0, 140),
+            outline=(255, 255, 255, 90),
+            width=1,
+        )
+        draw.text((center_x, 185), badge_text, fill=(220, 230, 255), font=badge_font, anchor="mm")
 
-        # 3. Main Narrative Visual Title (Middle Display: y=980px)
-        title_font = self._get_font(52)
-        words = title.upper().split()
-        lines = []
-        cur_line = []
-        for w in words:
-            cur_line.append(w)
-            if len(" ".join(cur_line)) > 18:
-                lines.append(" ".join(cur_line))
-                cur_line = []
-        if cur_line:
-            lines.append(" ".join(cur_line))
-
-        y_offset = center_y + 360
-        for line in lines[:3]:
-            # Glow shadow
-            draw.text((center_x + 3, y_offset + 3), line, fill=(0, 0, 0, 200), font=title_font, anchor="mm")
-            draw.text((center_x, y_offset), line, fill=(255, 255, 255), font=title_font, anchor="mm")
-            y_offset += 65
-
-        # 4. Technical Metric or Scientific Badge
-        metric_font = self._get_font(30)
-        metrics = [
-            "ATMOSPHERIC DEPTH: 12,000 KM",
-            "PRESSURE: 100,000+ ATMOSPHERES",
-            "CORE TEMPERATURE: 4,000° C",
-            "CRYSTALLIZATION: 99.8% PURE CARBON",
-            "STATE: SUPERCRITICAL HYDROGEN",
-            "EVIDENCE: NATURE PHYSICS & NASA JUNO",
-        ]
-        metric_text = metrics[scene_idx % len(metrics)]
-        draw.text((center_x, y_offset + 40), metric_text, fill=(180, 220, 255), font=metric_font, anchor="mm")
+        # 3. Subtle Scene Identifier (Top-Center: y=250px)
+        # Keeps the lower screen (Y=1250-1920) 100% clean for subtitles and platform UI
+        scene_label_font = self._get_font(32)
+        draw.text((center_x, 250), title.upper(), fill=(180, 210, 255, 180), font=scene_label_font, anchor="mm")
 
         img.save(str(output_path), "PNG")
         return output_path

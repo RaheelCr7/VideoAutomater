@@ -39,6 +39,7 @@ class AudioNarrator:
             volume="+0%",
         )
 
+        sentence_events: list[tuple[float, float, str]] = []
         words_data: list[SubtitleWord] = []
 
         try:
@@ -46,8 +47,11 @@ class AudioNarrator:
                 async for chunk in communicate.stream():
                     if chunk["type"] == "audio":
                         f.write(chunk["data"])
+                    elif chunk["type"] == "SentenceBoundary":
+                        start_sec = chunk["offset"] / 10_000_000.0
+                        dur_sec = chunk["duration"] / 10_000_000.0
+                        sentence_events.append((round(start_sec, 3), round(start_sec + dur_sec, 3), chunk["text"]))
                     elif chunk["type"] == "WordBoundary":
-                        # offset and duration in 100ns units (ticks)
                         start_sec = chunk["offset"] / 10_000_000.0
                         dur_sec = chunk["duration"] / 10_000_000.0
                         words_data.append(
@@ -79,11 +83,23 @@ class AudioNarrator:
 
         # Measure audio duration
         duration = self._get_audio_duration(output_wav_path)
-        logger.info(f"Synthesized neural narration: {duration:.2f}s with {len(words_data)} word markers.")
 
-        # Group words into sentence/phrase segments
-        segments = self._group_words_into_segments(words_data, script)
+        from videoautomater.visuals.subtitles import SubtitleGenerator
+        if sentence_events:
+            segments = SubtitleGenerator.segment_transcript(sentence_events)
+            logger.info(f"Synthesized neural narration: {duration:.2f}s with {len(sentence_events)} sentences and {len(segments)} short caption segments.")
+        else:
+            # Fallback to section timings
+            section_events = [(sec.timeline_start, sec.timeline_end, sec.narration_text) for sec in script.sections]
+            segments = SubtitleGenerator.segment_transcript(section_events)
+            logger.info(f"Synthesized narration: {duration:.2f}s with {len(segments)} section-derived caption segments.")
+
         return duration, segments
+
+    def _get_audio_duration(self, audio_path: Path) -> float:
+        """Read duration of an audio file in seconds."""
+        info = sf.info(str(audio_path))
+        return float(info.duration)
 
     def _generate_fallback_audio(
         self, script: StoryScript, output_wav_path: Path
@@ -92,62 +108,13 @@ class AudioNarrator:
         sample_rate = 48000
         duration = 80.0
         t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
-        # Gentle harmonic carrier tone simulating speech presence
         carrier = 0.05 * np.sin(2 * np.pi * 220 * t) + 0.03 * np.sin(2 * np.pi * 440 * t)
         sf.write(str(output_wav_path), carrier, sample_rate)
 
-        # Generate estimated word timestamps
-        words = script.full_text.split()
-        word_dur = duration / max(len(words), 1)
-        word_markers = [
-            SubtitleWord(
-                word=w,
-                start_time=round(i * word_dur, 3),
-                end_time=round((i + 0.8) * word_dur, 3),
-            )
-            for i, w in enumerate(words)
-        ]
-        segments = self._group_words_into_segments(word_markers, script)
+        from videoautomater.visuals.subtitles import SubtitleGenerator
+        section_events = [(sec.timeline_start, sec.timeline_end, sec.narration_text) for sec in script.sections]
+        segments = SubtitleGenerator.segment_transcript(section_events)
         return duration, segments
-
-    def _get_audio_duration(self, audio_path: Path) -> float:
-        """Read duration of an audio file in seconds."""
-        info = sf.info(str(audio_path))
-        return float(info.duration)
-
-    def _group_words_into_segments(
-        self, words: list[SubtitleWord], script: StoryScript
-    ) -> list[SubtitleSegment]:
-        """Group word markers into displayable subtitle phrases of 4-7 words each."""
-        segments: list[SubtitleSegment] = []
-        if not words:
-            # Fallback based on sections
-            for idx, sec in enumerate(script.sections):
-                segments.append(
-                    SubtitleSegment(
-                        index=idx + 1,
-                        start_time=sec.timeline_start,
-                        end_time=sec.timeline_end,
-                        text=sec.narration_text,
-                    )
-                )
-            return segments
-
-        chunk_size = 5
-        for i in range(0, len(words), chunk_size):
-            chunk = words[i : i + chunk_size]
-            seg_text = " ".join(w.word for w in chunk)
-            segments.append(
-                SubtitleSegment(
-                    index=len(segments) + 1,
-                    start_time=chunk[0].start_time,
-                    end_time=chunk[-1].end_time,
-                    text=seg_text,
-                    words=chunk,
-                )
-            )
-
-        return segments
 
     def generate_ambient_music(self, duration: float, output_path: Path) -> Path:
         """Synthesize a subtle, cinematic space-synth ambient track for background mixing."""

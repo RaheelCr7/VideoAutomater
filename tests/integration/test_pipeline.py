@@ -51,7 +51,7 @@ def test_subtitle_generator_srt_and_ass():
         assert ass_file.exists()
         assert "PlayResX: 1080" in ass_file.read_text()
         assert "PlayResY: 1920" in ass_file.read_text()
-        assert "MarginV, 260" in ass_file.read_text() or "260" in ass_file.read_text()
+        assert "460" in ass_file.read_text()
 
 
 @pytest.mark.asyncio

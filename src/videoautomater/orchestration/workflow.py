@@ -135,7 +135,7 @@ class ProductionOrchestrator:
         self.assembler.render_master_video(
             storyboard=storyboard,
             audio_path=mixed_audio_aac,
-            subtitles_path=subtitles_srt,
+            subtitles_path=subtitles_ass,
             output_mp4_path=final_mp4,
         )
 
