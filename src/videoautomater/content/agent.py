@@ -171,8 +171,60 @@ class ScriptwritingAgent:
                     visual_intent="Cinematic wide panoramic view of the African landscape transitioning into the peaceful preserved geological strata today.",
                 ),
             ]
+        elif any(k in topic_lower for k in ["black hole", "bend light", "relativistic", "photon sphere", "spacetime"]):
+            # 3. Black Hole Relativistic Optics & Light Bending (Luminet 1979, Virbhadra & Ellis 2000, Bozza 2002)
+            sections = [
+                ScriptSection(
+                    section_id="sec_01_hook",
+                    timeline_start=0.0,
+                    timeline_end=12.0,
+                    role="HOOK",
+                    narration_text="At the edge of a black hole, gravity becomes so immense that it bends the path of light itself, warping space into a cosmic magnifying lens.",
+                    visual_intent="Cinematic approach to a supermassive black hole showing celestial starfield warping around the central gravitational singularity.",
+                ),
+                ScriptSection(
+                    section_id="sec_02_mystery",
+                    timeline_start=12.0,
+                    timeline_end=26.0,
+                    role="MYSTERY",
+                    narration_text="In classical Newtonian physics, light was believed to travel strictly in straight lines. But Albert Einstein's General Relativity revealed that photons must follow curved null geodesics through the warped fabric of Schwarzschild spacetime.",
+                    visual_intent="Newtonian straight coordinate grid warping dynamically into Einsteinian curved Schwarzschild spacetime geometry.",
+                ),
+                ScriptSection(
+                    section_id="sec_03_revelation",
+                    timeline_start=26.0,
+                    timeline_end=42.0,
+                    role="REVELATION",
+                    narration_text="At radial distance r equals one point five Schwarzschild radii lies the photon sphere. Here, gravity is so severe that light orbits in unstable circular equilibrium. Any ray passing inside the critical impact parameter, b crit, is pulled across the event horizon, forming the black hole shadow.",
+                    visual_intent="Ray-traced Schwarzschild null geodesics dividing at the photon sphere r = 1.5 rs, with critical impact parameter b_crit = sqrt(27)M defining the shadow boundary.",
+                ),
+                ScriptSection(
+                    section_id="sec_04_escalation",
+                    timeline_start=42.0,
+                    timeline_end=58.0,
+                    role="ESCALATION",
+                    narration_text="Light rays passing just outside the photon sphere experience strong-field deflection, curving around the singularity multiple times. This extreme gravitational lensing bends background starlight into brilliant, concentric Einstein rings.",
+                    visual_intent="Strong deflection of background starlight producing multiple apparent images and concentric luminous Einstein rings orbiting the horizon.",
+                ),
+                ScriptSection(
+                    section_id="sec_05_climax",
+                    timeline_start=58.0,
+                    timeline_end=72.0,
+                    role="CLIMAX",
+                    narration_text="Surrounding the singularity, a glowing accretion disk orbits near the speed of light. Relativistic Doppler beaming amplifies the approaching left limb into intense blue-white brilliance, while the receding right limb dims into redshifted amber.",
+                    visual_intent="High-energy accretion disk rotating at relativistic speeds with dramatic Doppler boosting asymmetry on the approaching limb.",
+                ),
+                ScriptSection(
+                    section_id="sec_06_payoff",
+                    timeline_start=72.0,
+                    timeline_end=80.0,
+                    role="PAYOFF",
+                    narration_text="These extreme optical distortions prove that spacetime is not a passive void, but an active physical canvas sculpted by the deepest gravitational wells in the cosmos.",
+                    visual_intent="Grand cosmic pullback from the lensed black hole system, framing the glowing photon ring against deep space.",
+                ),
+            ]
         else:
-            # 3. Dynamic Narrative Synthesis for Any Arbitrary Topic
+            # 4. Dynamic Narrative Synthesis for Any Arbitrary Topic
             f1 = brief.verified_facts[0] if brief.verified_facts else "Scientific analysis overturned established historical models."
             f2 = brief.verified_facts[1] if len(brief.verified_facts) > 1 else f1
             f3 = brief.verified_facts[2] if len(brief.verified_facts) > 2 else f2

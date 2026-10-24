@@ -79,12 +79,12 @@ class AgentStepLog(BaseModel):
 
 
 class QAReport(BaseModel):
-    passed: bool = True
-    subtitles_synchronized: bool = True
-    safe_zones_respected: bool = True
-    rights_cleared: bool = True
-    vocabulary_coverage: float = 1.0
-    provenance_verified: bool = True
+    passed: bool = False
+    subtitles_synchronized: bool = False
+    safe_zones_respected: bool = False
+    rights_cleared: bool = False
+    vocabulary_coverage: float = 0.0
+    provenance_verified: bool = False
     claims_verified: List[str] = Field(default_factory=list)
     details: Dict[str, Any] = Field(default_factory=dict)
 

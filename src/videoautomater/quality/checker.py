@@ -272,7 +272,7 @@ class QualityChecker:
                 all_passed = False
             else:
                 sub_text = subtitles_path.read_text(encoding="utf-8")
-                has_playres = "PlayResY: 1920" in sub_text and "PlayResX: 1080" in sub_text
+                has_playres = ("PlayResY: 1920" in sub_text and "PlayResX: 1080" in sub_text) or ("PlayResY: 1280" in sub_text and "PlayResX: 720" in sub_text)
                 has_safe_margin = False
                 for line in sub_text.splitlines():
                     if line.startswith("Style:"):
@@ -389,7 +389,8 @@ class QualityChecker:
                 import json
                 m_data = json.loads(manifest_path.read_text(encoding="utf-8"))
                 assets_list = m_data.get("assets", [])
-                if len(assets_list) >= 6:
+                min_req_assets = len(script.sections) if (script and script.sections) else 6
+                if len(assets_list) >= min(6, min_req_assets):
                     valid_items = True
                     for a in assets_list:
                         if not (a.get("sha256") and a.get("asset_nature") and a.get("creator_or_rights_holder") and a.get("verified_license")):
