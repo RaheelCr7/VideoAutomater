@@ -28,5 +28,5 @@ class StoryScript(BaseModel):
     target_duration_seconds: float = Field(default=80.0)
     total_spoken_words: int
     estimated_reading_speed_wps: float = Field(description="Target 2.1 - 2.3 words/second")
-    sections: list[ScriptSection] = Field(min_length=6, max_length=6)
+    sections: list[ScriptSection] = Field(min_length=1)
     full_text: str

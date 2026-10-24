@@ -269,7 +269,19 @@ class QualityChecker:
             else:
                 sub_text = subtitles_path.read_text(encoding="utf-8")
                 has_playres = "PlayResY: 1920" in sub_text and "PlayResX: 1080" in sub_text
-                has_safe_margin = "MarginV: 460" in sub_text or "MarginV:" in sub_text
+                has_safe_margin = False
+                for line in sub_text.splitlines():
+                    if line.startswith("Style:"):
+                        parts = line.split(",")
+                        if len(parts) >= 22:
+                            try:
+                                mv = int(parts[21].strip())
+                                if 350 <= mv <= 550:
+                                    has_safe_margin = True
+                            except ValueError:
+                                pass
+                if not has_safe_margin and ",460," in sub_text:
+                    has_safe_margin = True
                 
                 # Check max words per dialogue event
                 dialogue_lines = [l for l in sub_text.splitlines() if l.startswith("Dialogue:")]

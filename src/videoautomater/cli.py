@@ -77,6 +77,36 @@ def generate(
     )
 
 
+@app.command("demo")
+def demo(
+    output: str = typer.Option("output/animation_demo", "--output", "-o", help="Directory for demonstration output"),
+):
+    """Generate a 20-second cinematic animation proof-of-concept demonstrating the upgraded engine."""
+    from videoautomater.orchestration.demo_runner import AnimationDemoRunner
+
+    console.print(
+        Panel.fit(
+            f"[bold cyan]VideoAutomater v{__version__} // Explanatory Animation Engine[/bold cyan]\n"
+            f"[dim]Rendering 20-second Cinematic Motion & Subtitle Quality Proof-of-Concept...[/dim]",
+            border_style="cyan",
+        )
+    )
+
+    runner = AnimationDemoRunner(output_dir=Path(output))
+    with console.status("[bold green]Rendering cinematic animations & word-aligned subtitles...", spinner="dots"):
+        demo_path = asyncio.run(runner.run_demonstration())
+
+    console.print(
+        Panel.fit(
+            f"[bold green]Animation Demonstration Rendered Successfully![/bold green]\n"
+            f"[bold]Video:[/bold] {demo_path}\n"
+            f"[bold]Contact Sheet:[/bold] {demo_path.parent / 'contact_sheet.jpg'}\n"
+            f"[bold]Artifacts:[/bold] {demo_path.parent}",
+            border_style="green",
+        )
+    )
+
+
 def main():
     app()
 
