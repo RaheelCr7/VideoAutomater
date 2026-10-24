@@ -207,6 +207,24 @@ class SubjectMediaDirector:
         out_dir.mkdir(parents=True, exist_ok=True)
         clip_file = Path(output_path) if output_path else out_dir / f"subject_anim_{abs(hash(subject)) % 100000}.mp4"
 
+        sub_lower = subject.lower()
+        if any(k in sub_lower for k in ["black hole", "relativ", "photon sphere", "gravity", "lensing", "spacetime"]):
+            try:
+                from videoautomater.visuals.relativistic_engine import RelativisticOpticsEngine
+                engine = RelativisticOpticsEngine(width=width, height=height)
+                engine.render_dynamic_relativistic_clip(
+                    output_mp4_path=clip_file,
+                    duration_sec=duration_sec,
+                    fps=fps,
+                    stage="CLIMAX",
+                    camera_mode="ORBIT",
+                    doppler_enhancement=1.5,
+                    scene_heading=f"RELATIVISTIC SIMULATION // {subject.upper()[:30]}"
+                )
+                return str(clip_file.resolve())
+            except Exception as e:
+                logger.warning(f"Could not use RelativisticOpticsEngine, falling back: {e}")
+
         img = self._render_black_hole_relativity_frame("CLIMAX", 1)
         temp_frame = out_dir / "temp_sub_frame.jpg"
         img.save(temp_frame, quality=95)

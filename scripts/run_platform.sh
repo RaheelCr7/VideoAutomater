@@ -16,4 +16,4 @@ echo "=== Launching Beyond 80 — Agent Control Center ==="
 echo "Access the Control Center at: http://localhost:8000"
 echo "API Docs at: http://localhost:8000/docs"
 
-exec uvicorn videoautomater.server.app:app --host 0.0.0.0 --port 8000 --reload
+exec uvicorn videoautomater.server.app:app --host 127.0.0.1 --port 8000 --reload

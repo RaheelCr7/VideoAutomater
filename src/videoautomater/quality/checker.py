@@ -296,7 +296,6 @@ class QualityChecker:
                     if len(parts) >= 10:
                         text_part = parts[9]
                         # Remove ASS formatting tags like {\c&H...&} or \N
-                        import re
                         clean_text = re.sub(r"\{.*?\}", "", text_part).replace(r"\N", " ").strip()
                         words = len(clean_text.split())
                         if words > max_words:

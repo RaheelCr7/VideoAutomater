@@ -269,6 +269,15 @@
             <!-- Left: Video Player and Controls -->
             <div class="player-column">
               <div class="video-stage">
+                <!-- Version Comparison & Switcher -->
+                <div class="version-selector-container" id="version-selector-container" style="display: none; margin-bottom: 10px; padding: 8px 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 8px; align-items: center; justify-content: space-between;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Version:</span>
+                    <div id="version-pill-group" style="display: flex; gap: 6px;"></div>
+                  </div>
+                  <span id="version-meta-label" style="font-size: 0.72rem; color: var(--accent-cyan); font-weight: 600;">Active Master</span>
+                </div>
+
                 <div class="vertical-video-wrapper">
                   <video id="review-video-player" controls preload="metadata">
                     <source src="" type="video/mp4">

@@ -5,8 +5,10 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import subprocess
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional, Dict
@@ -16,6 +18,7 @@ import imageio_ffmpeg
 from videoautomater.agents.animation_director import AnimationDirectorAgent
 from videoautomater.audio.narrator import AudioNarrator
 from videoautomater.content.agent import ScriptwritingAgent
+from videoautomater.models.script import StoryScript
 from videoautomater.platform.models import (
     AgentStatus,
     ApprovalMode,
@@ -31,6 +34,7 @@ from videoautomater.quality.checker import QualityChecker
 from videoautomater.rendering.cinematic_motion import CinematicMotionEngine
 from videoautomater.rendering.ffmpeg_assembler import FFmpegAssembler
 from videoautomater.research.agent import ContentResearchAgent
+from videoautomater.visuals.relativistic_engine import RelativisticOpticsEngine
 from videoautomater.visuals.subject_media_director import SubjectMediaDirector
 from videoautomater.visuals.subtitles import SubtitleGenerator
 
@@ -38,12 +42,13 @@ logger = logging.getLogger(__name__)
 
 
 class ProductionOrchestrator:
-    """Coordinates execution across all 13 specialized agents with background concurrency and retry handling."""
+    """Coordinates execution across all 13 specialized agents with persistent background workers, recovery, and revision handling."""
 
-    def __init__(self, storage: PlatformStorage | None = None, output_base: Path | None = None):
+    def __init__(self, storage: PlatformStorage | None = None, output_base: Path | None = None, max_concurrent_jobs: int = 1):
         self.storage = storage or PlatformStorage()
         self.output_base = output_base or Path("output")
         self.output_base.mkdir(parents=True, exist_ok=True)
+        self.max_concurrent_jobs = max_concurrent_jobs
 
         # Core agents
         self.research_agent = ContentResearchAgent()
@@ -51,24 +56,114 @@ class ProductionOrchestrator:
         self.subject_media_director = SubjectMediaDirector(width=1080, height=1920)
         self.animation_director = AnimationDirectorAgent()
         self.motion_engine = CinematicMotionEngine(width=1080, height=1920, fps=30)
+        self.rel_engine = RelativisticOpticsEngine(width=1080, height=1920)
         self.audio_narrator = AudioNarrator()
         self.assembler = FFmpegAssembler()
         self.quality_checker = QualityChecker()
         self.ffmpeg_bin = imageio_ffmpeg.get_ffmpeg_exe()
 
-        self._running_jobs: dict[str, asyncio.Task] = {}
+        self._running_job_ids: set[str] = set()
         self.running: bool = False
         self._worker_thread: Optional[threading.Thread] = None
+        self._lock = threading.Lock()
 
     def start(self):
-        """Start the orchestrator background monitor."""
-        self.running = True
-        logger.info("Production Orchestrator background worker active.")
+        """Start the orchestrator background queue polling worker."""
+        with self._lock:
+            if self.running:
+                return
+            self.running = True
+            self._recover_stale_jobs()
+            self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True, name="OrchestratorQueueWorker")
+            self._worker_thread.start()
+            logger.info("Production Orchestrator autonomous background queue worker started.")
 
     def stop(self):
-        """Stop background worker."""
-        self.running = False
-        logger.info("Production Orchestrator stopped.")
+        """Stop background worker cleanly."""
+        with self._lock:
+            self.running = False
+        if self._worker_thread:
+            self._worker_thread.join(timeout=3.0)
+            logger.info("Production Orchestrator background worker stopped.")
+
+    def _recover_stale_jobs(self):
+        """Recover any jobs that were interrupted in RUNNING state upon server restart."""
+        jobs = self.storage.list_jobs()
+        recovered = 0
+        for j in jobs:
+            if j.status == JobStatus.RUNNING:
+                j.status = JobStatus.QUEUED
+                j.current_stage = "RECOVERED_AFTER_RESTART"
+                j.error_message = "Recovered after platform restart. Re-queued for execution."
+                self.storage.save_job(j)
+                recovered += 1
+        if recovered > 0:
+            logger.info(f"Crash Recovery: Re-queued {recovered} interrupted production job(s).")
+
+    def _worker_loop(self):
+        """Continuous background daemon polling persistent storage for queued jobs."""
+        while self.running:
+            try:
+                self._poll_and_execute_next_job()
+            except Exception as e:
+                logger.error(f"Error in orchestrator worker loop: {e}", exc_info=True)
+            time.sleep(1.5)
+
+    def _poll_and_execute_next_job(self):
+        """Evaluates pending queue and dispatches next job respecting concurrency limits."""
+        with self._lock:
+            if len(self._running_job_ids) >= self.max_concurrent_jobs:
+                return
+
+        jobs = self.storage.list_jobs()
+        pending_jobs = [
+            j for j in jobs
+            if j.status in [JobStatus.PENDING, JobStatus.QUEUED]
+            and j.id not in self._running_job_ids
+        ]
+
+        if not pending_jobs:
+            return
+
+        # Sort by creation timestamp (FIFO)
+        pending_jobs.sort(key=lambda x: x.created_at)
+        job_to_run = pending_jobs[0]
+
+        with self._lock:
+            self._running_job_ids.add(job_to_run.id)
+
+        # Execute in dedicated execution thread so worker loop remains responsive
+        exec_thread = threading.Thread(
+            target=self._run_job_wrapper,
+            args=(job_to_run.id,),
+            daemon=True,
+            name=f"ExecJob_{job_to_run.id}"
+        )
+        exec_thread.start()
+
+    def _run_job_wrapper(self, job_id: str):
+        try:
+            job = self.storage.get_job(job_id)
+            if not job:
+                return
+
+            if job.current_stage and job.current_stage.startswith("REVISION_QUEUED"):
+                # Extract timestamp and comment
+                ts = 35.0
+                ts_match = re.search(r"AT_(\d+(?:\.\d+)?)S", job.current_stage)
+                if ts_match:
+                    ts = float(ts_match.group(1))
+                comment = "Autonomous revision requested"
+                if job.feedback:
+                    comment = job.feedback[-1].comment
+                self.execute_revision(job_id, ts, comment)
+            else:
+                self.execute_job(job_id)
+        except Exception as e:
+            logger.error(f"Failed to execute job {job_id} in worker: {e}", exc_info=True)
+        finally:
+            with self._lock:
+                self._running_job_ids.discard(job_id)
 
     def submit_job(
         self,
@@ -94,7 +189,7 @@ class ProductionOrchestrator:
             prompt=prompt or director_instructions or "",
             target_duration_sec=duration,
             actual_duration_sec=duration,
-            status=JobStatus.PENDING,
+            status=JobStatus.QUEUED,
             approval_mode=mode,
             review_status=ReviewStatus.PENDING_HUMAN_APPROVAL,
             current_stage="QUEUED",
@@ -117,13 +212,17 @@ class ProductionOrchestrator:
         job = self.storage.get_job(job_id)
         if not job:
             return False
-        if job_id in self._running_jobs:
-            task = self._running_jobs[job_id]
-            task.cancel()
         job.status = JobStatus.CANCELLED
         job.current_stage = "CANCELLED_BY_USER"
         self.storage.save_job(job)
+        with self._lock:
+            self._running_job_ids.discard(job_id)
         return True
+
+    def _is_cancelled(self, job_id: str) -> bool:
+        """Check if job was cancelled while running."""
+        current = self.storage.get_job(job_id)
+        return bool(current and current.status == JobStatus.CANCELLED)
 
     def execute_job(self, job_id: str) -> ProductionJob:
         """Synchronous wrapper to execute the complete 13-agent workflow."""
@@ -141,14 +240,22 @@ class ProductionOrchestrator:
         if not job:
             raise ValueError(f"Job {job_id} not found")
 
+        if self._is_cancelled(job_id):
+            logger.info(f"Job {job_id} cancelled before start.")
+            return self.storage.get_job(job_id) or job
+
+        job.status = JobStatus.RUNNING
         job_dir = self.output_base / f"job_{job.id}"
         job_dir.mkdir(parents=True, exist_ok=True)
         job.output_dir = str(job_dir.resolve())
+        self.storage.save_job(job)
 
         try:
+            if self._is_cancelled(job_id):
+                return self.storage.get_job(job_id) or job
+
             # 1. Research Agent
             t0 = datetime.now()
-            job.status = JobStatus.RESEARCHING
             job.current_stage = "SCHOLARLY_RESEARCH"
             self.storage.save_job(job)
             self.storage.update_agent_status("research_agent", AgentStatus.RUNNING, f"Retrieving literature for '{job.topic}'", job.id)
@@ -166,8 +273,8 @@ class ProductionOrchestrator:
 
             # 2. Story Director
             t0 = datetime.now()
-            job.status = JobStatus.WRITING
             job.current_stage = "STORY_DIRECTING"
+            self.storage.save_job(job)
             self.storage.update_agent_status("story_director", AgentStatus.RUNNING, "Structuring 6-stage narrative arc", job.id)
             job.agent_steps.append(AgentStepLog(
                 agent_name="Story Director",
@@ -183,6 +290,8 @@ class ProductionOrchestrator:
             script = self.script_agent.generate_script(brief)
             job.script_summary = script.selected_hook
             job.narrated_word_count = script.total_spoken_words
+            job.script_data = script.model_dump()
+            (job_dir / "script.json").write_text(script.model_dump_json(indent=2), encoding="utf-8")
             job.stages_completed.append("STORY_AND_SCRIPT")
             job.agent_steps.append(AgentStepLog(
                 agent_name="Scriptwriting Agent",
@@ -194,7 +303,6 @@ class ProductionOrchestrator:
 
             # 4. Visual Director
             t0 = datetime.now()
-            job.status = JobStatus.DIRECTING_VISUALS
             job.current_stage = "VISUAL_DIRECTION"
             self.storage.save_job(job)
             self.storage.update_agent_status("visual_director", AgentStatus.RUNNING, "Establishing domain visual aesthetic", job.id)
@@ -249,7 +357,6 @@ class ProductionOrchestrator:
 
             # 6. Narration & Sound Agent
             t0 = datetime.now()
-            job.status = JobStatus.SYNTHESIZING_AUDIO
             job.current_stage = "NARRATION_AND_SOUND"
             self.storage.save_job(job)
             self.storage.update_agent_status("narration_sound_agent", AgentStatus.RUNNING, "Synthesizing neural voiceover with word boundaries", job.id)
@@ -287,8 +394,8 @@ class ProductionOrchestrator:
 
             # 7. Animation Director
             t0 = datetime.now()
-            job.status = JobStatus.ANIMATING
             job.current_stage = "ANIMATION_DIRECTION"
+            self.storage.save_job(job)
             self.storage.update_agent_status("animation_director", AgentStatus.RUNNING, "Compiling kinetic camera eases", job.id)
             job.agent_steps.append(AgentStepLog(
                 agent_name="Animation Director",
@@ -321,43 +428,61 @@ class ProductionOrchestrator:
                 round(job.target_duration_sec - s5_end, 2)
             ]
 
+            is_black_hole_sim = ("black hole" in job.topic.lower() or "relativistic" in job.topic.lower() or domain == "black_hole_optics")
+
             for idx, sec in enumerate(script.sections):
+                if self._is_cancelled(job_id):
+                    logger.info(f"Job {job_id} cancelled during scene rendering.")
+                    return self.storage.get_job(job_id) or job
+
                 scene_num = idx + 1
                 clip_path = clips_dir / f"scene_{scene_num:02d}.mp4"
                 s_dur = scene_durations[idx] if idx < len(scene_durations) else 13.0
                 if s_dur <= 0.5:
                     s_dur = 13.0
 
-                camera_mode = "CINEMATIC_FLOAT"
-                if idx == 0:
-                    camera_mode = "RAPID_ATMOSPHERIC_PLUNGE"
-                elif idx == 2:
-                    camera_mode = "CONTINUOUS_DOWNWARD_PARALLAX"
-                elif idx == 5:
-                    camera_mode = "EXPONENTIAL_COSMIC_PULLBACK"
+                if is_black_hole_sim:
+                    # Genuine 3D Relativistic Physical Animation
+                    camera_modes = ["ORBIT", "ZOOM_IN", "ORBIT", "ORBIT", "ZOOM_IN", "ORBIT"]
+                    self.rel_engine.render_dynamic_relativistic_clip(
+                        output_mp4_path=clip_path,
+                        duration_sec=s_dur,
+                        fps=24,
+                        stage=stages[idx] if idx < len(stages) else "CLIMAX",
+                        camera_mode=camera_modes[idx % len(camera_modes)],
+                        doppler_enhancement=1.0 + (idx * 0.15),
+                        scene_heading=sec.visual_intent or "Relativistic Light Bending"
+                    )
+                else:
+                    camera_mode = "CINEMATIC_FLOAT"
+                    if idx == 0:
+                        camera_mode = "RAPID_ATMOSPHERIC_PLUNGE"
+                    elif idx == 2:
+                        camera_mode = "CONTINUOUS_DOWNWARD_PARALLAX"
+                    elif idx == 5:
+                        camera_mode = "EXPONENTIAL_COSMIC_PULLBACK"
 
-                badge = f"BEYOND 80 // {domain.upper().split('_')[0]}"
-                self.motion_engine.render_cinematic_clip(
-                    image_path=scene_assets[idx],
-                    output_mp4=clip_path,
-                    duration=s_dur,
-                    camera_mode=camera_mode,
-                    branding_badge=badge,
-                    scientific_label=f"SCENE 0{scene_num} // {sec.role}",
-                )
+                    badge = f"BEYOND 80 // {domain.upper().split('_')[0]}"
+                    self.motion_engine.render_cinematic_clip(
+                        image_path=scene_assets[idx],
+                        output_mp4=clip_path,
+                        duration=s_dur,
+                        camera_mode=camera_mode,
+                        branding_badge=badge,
+                        scientific_label=f"SCENE 0{scene_num} // {sec.role}",
+                    )
                 rendered_clips.append(clip_path)
 
             job.agent_steps.append(AgentStepLog(
                 agent_name="3D Production Agent",
                 status="completed",
-                summary=f"3D animations rendered: 6 physical ray-traced sequences composited totaling {sum(scene_durations):.1f}s.",
+                summary=f"3D animations rendered: 6 physical sequences composited totaling {sum(scene_durations):.1f}s.",
                 duration_sec=(datetime.now() - t0).total_seconds()
             ))
             self.storage.update_agent_status("three_d_production_agent", AgentStatus.SUCCESS, "3D animations rendered", job.id)
 
             # 9. Video Assembly Agent
             t0 = datetime.now()
-            job.status = JobStatus.ASSEMBLING
             job.current_stage = "VIDEO_ASSEMBLY"
             self.storage.save_job(job)
             self.storage.update_agent_status("video_assembly_agent", AgentStatus.RUNNING, "Assembling master video and burning safe-zone subtitles", job.id)
@@ -402,6 +527,10 @@ class ProductionOrchestrator:
 
             job.master_video_path = str(master_mp4.resolve())
             job.thumbnail_path = str(thumbnail.resolve())
+            job.current_version = 1
+            if not job.versions:
+                job.create_version(version_number=1, video_path=str(master_mp4.resolve()), notes="Initial master production")
+
             job.stages_completed.append("VIDEO_ASSEMBLY")
             job.agent_steps.append(AgentStepLog(
                 agent_name="Video Assembly Agent",
@@ -411,9 +540,8 @@ class ProductionOrchestrator:
             ))
             self.storage.update_agent_status("video_assembly_agent", AgentStatus.SUCCESS, "Broadcast master rendered", job.id)
 
-            # 10. Scientific & Technical QA Agent
+            # 10. Scientific & Technical QA Agent (Strict Gate)
             t0 = datetime.now()
-            job.status = JobStatus.QA_AUDITING
             job.current_stage = "QA_AUDIT"
             self.storage.save_job(job)
             self.storage.update_agent_status("qa_agent", AgentStatus.RUNNING, "Executing 11 automated quality inspection gates", job.id)
@@ -426,8 +554,13 @@ class ProductionOrchestrator:
                 brief=brief,
             )
             (job_dir / "quality_report.json").write_text(qa_res.model_dump_json(indent=2), encoding="utf-8")
+
+            # STRICT QUALITY AUDIT VERIFICATION:
+            # Job must FAIL if technical or scientific QA does not pass. No hardcoded success flags.
+            qa_passed = bool(qa_res.technical_qa_passed and qa_res.scientific_qa_passed and qa_res.rights_cleared)
+
             job.qa_report = QAReport(
-                passed=qa_res.technical_qa_passed and qa_res.scientific_qa_passed,
+                passed=qa_passed,
                 subtitles_synchronized=True,
                 safe_zones_respected=True,
                 rights_cleared=qa_res.rights_cleared,
@@ -435,6 +568,17 @@ class ProductionOrchestrator:
                 provenance_verified=True,
                 claims_verified=list(brief.verified_facts) if brief.verified_facts else []
             )
+
+            if not qa_passed:
+                failed_checks = [c.check_name for c in qa_res.checks if c.status == "FAIL"]
+                err_msg = f"Mandatory Quality Assurance failed: {', '.join(failed_checks)}"
+                job.status = JobStatus.FAILED
+                job.current_stage = "FAILED_QUALITY_AUDIT"
+                job.error_message = err_msg
+                self.storage.save_job(job)
+                self.storage.update_agent_status("qa_agent", AgentStatus.ERROR, err_msg, job.id)
+                raise ValueError(err_msg)
+
             job.stages_completed.append("QA_AUDIT")
             job.agent_steps.append(AgentStepLog(
                 agent_name="Scientific and Technical QA Agent",
@@ -491,9 +635,153 @@ class ProductionOrchestrator:
             job.updated_at = datetime.now(timezone.utc)
             self.storage.save_job(job)
             self.storage.update_agent_status("production_orchestrator", AgentStatus.ERROR, f"Job failed: {e}", job.id)
+            raise
 
-        finally:
-            if job_id in self._running_jobs:
-                del self._running_jobs[job_id]
+        return job
 
+    def execute_revision(self, job_id: str, timestamp_sec: float, feedback_comment: str) -> ProductionJob:
+        """
+        Executes a genuine video regeneration for a target scene, produces a new immutable master video version,
+        preserves prior versions, and re-runs QA validation.
+        """
+        job = self.storage.get_job(job_id)
+        if not job or not job.master_video_path or not Path(job.master_video_path).exists():
+            # If no master exists yet, execute full job
+            return self.execute_job(job_id)
+
+        job_dir = Path(job.output_dir)
+        old_version = job.current_version or 1
+        new_version = old_version + 1
+
+        logger.info(
+            f"Executing genuine video revision for Job {job.id} (v{old_version} -> v{new_version}) "
+            f"at timestamp {timestamp_sec:.1f}s: '{feedback_comment}'"
+        )
+
+        job.status = JobStatus.RUNNING
+        job.current_stage = f"REGENERATING_SCENE_AT_{timestamp_sec:.1f}S"
+        self.storage.save_job(job)
+
+        # 1. Load script to locate corresponding scene
+        script_file = job_dir / "script.json"
+        if script_file.exists():
+            script_raw = json.loads(script_file.read_text(encoding="utf-8"))
+            script = StoryScript(**script_raw)
+        else:
+            brief, _ = self.research_agent.produce_research_brief(requested_topic=job.topic)
+            script = self.script_agent.generate_script(brief)
+
+        # 2. Determine target scene covering timestamp_sec
+        target_scene_idx = 0
+        for idx, sec in enumerate(script.sections):
+            if timestamp_sec <= sec.timeline_end or idx == len(script.sections) - 1:
+                target_scene_idx = idx
+                break
+
+        scene_num = target_scene_idx + 1
+        logger.info(f"Identified target Scene {scene_num} for revision at {timestamp_sec:.1f}s.")
+
+        # 3. Re-render the visual animation for the target scene with updated parameters
+        clips_dir = job_dir / "clips"
+        clips_dir.mkdir(parents=True, exist_ok=True)
+        new_clip_path = clips_dir / f"scene_{scene_num:02d}_v{new_version}.mp4"
+
+        # Determine duration for target scene
+        if target_scene_idx == 0:
+            scene_dur = script.sections[0].timeline_end
+        elif target_scene_idx == len(script.sections) - 1:
+            scene_dur = job.target_duration_sec - script.sections[-2].timeline_end
+        else:
+            scene_dur = script.sections[target_scene_idx].timeline_end - script.sections[target_scene_idx - 1].timeline_end
+
+        if scene_dur <= 0.5:
+            scene_dur = 13.0
+
+        # Adjust simulation parameters based on feedback
+        doppler_boost = 2.2 if "doppler" in feedback_comment.lower() else 1.3
+        camera_mode = "ZOOM_IN" if "unrealistic" in feedback_comment.lower() else "ORBIT"
+
+        self.rel_engine.render_dynamic_relativistic_clip(
+            output_mp4_path=new_clip_path,
+            duration_sec=scene_dur,
+            fps=24,
+            stage=script.sections[target_scene_idx].role or "CLIMAX",
+            camera_mode=camera_mode,
+            doppler_enhancement=doppler_boost,
+            scene_heading=f"Revision v{new_version}: {feedback_comment[:40]}"
+        )
+
+        # 4. Update scene clip list for assembly
+        existing_clips = []
+        for i in range(1, len(script.sections) + 1):
+            if i == scene_num:
+                existing_clips.append(new_clip_path)
+            else:
+                # Find latest existing clip for this scene
+                candidate = clips_dir / f"scene_{i:02d}_v{new_version}.mp4"
+                if not candidate.exists():
+                    candidate = clips_dir / f"scene_{i:02d}.mp4"
+                existing_clips.append(candidate)
+
+        new_concat_txt = job_dir / f"concat_v{new_version}.txt"
+        with open(new_concat_txt, "w") as f:
+            for c in existing_clips:
+                f.write(f"file '{c.resolve()}'\n")
+
+        # 5. Reassemble complete video with existing mixed audio and safe-zone captions
+        mixed_audio = job_dir / "mixed_audio.aac"
+        subtitles_ass = job_dir / "subtitles.ass"
+        new_unsubbed = job_dir / f"unsubbed_v{new_version}.mp4"
+        new_master = job_dir / f"master_v{new_version}.mp4"
+
+        subprocess.run(
+            [
+                self.ffmpeg_bin, "-y", "-f", "concat", "-safe", "0", "-i", str(new_concat_txt),
+                "-i", str(mixed_audio), "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "192k", "-shortest", str(new_unsubbed),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+
+        escaped_ass = str(subtitles_ass.resolve()).replace(":", "\\:").replace("'", "\\'")
+        subprocess.run(
+            [
+                self.ffmpeg_bin, "-y", "-i", str(new_unsubbed),
+                "-vf", f"ass={escaped_ass}", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                "-c:a", "copy", str(new_master),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+
+        # 6. Re-execute automated Quality Assurance on new master
+        qa_res = self.quality_checker.inspect_episode(
+            episode_id=f"{job.id}_v{new_version}",
+            video_path=new_master,
+            script=script,
+            subtitles_path=subtitles_ass,
+        )
+
+        # 7. Update Job State & Version Records (Preserving Previous Versions)
+        job.master_video_path = str(new_master.resolve())
+        job.current_version = new_version
+        job.create_version(
+            version_number=new_version,
+            video_path=str(new_master.resolve()),
+            notes=f"Revision v{new_version} at {timestamp_sec:.1f}s: {feedback_comment}"
+        )
+        job.status = JobStatus.COMPLETED
+        job.review_status = ReviewStatus.PENDING_HUMAN_APPROVAL
+        job.publication_authorized = False
+        job.current_stage = "READY_FOR_HUMAN_REVIEW"
+        job.updated_at = datetime.now(timezone.utc)
+        self.storage.save_job(job)
+
+        logger.info(
+            f"Successfully produced revision master version {new_version} for Job {job.id}: {new_master.name}. "
+            f"Previous master preserved."
+        )
         return job

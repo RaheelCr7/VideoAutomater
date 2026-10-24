@@ -526,6 +526,26 @@ window.openInReview = async function(jobId) {
       player.load();
     }
 
+    // Populate Version Switcher & Comparison
+    const vSelectorBox = document.getElementById('version-selector-container');
+    const vPillGroup = document.getElementById('version-pill-group');
+    const vMetaLabel = document.getElementById('version-meta-label');
+
+    if (vSelectorBox && job.versions && job.versions.length > 0) {
+      vSelectorBox.style.display = 'flex';
+      const curVer = job.current_version || job.versions[job.versions.length - 1].version_number;
+      vPillGroup.innerHTML = job.versions.map(v => `
+        <button class="version-pill-btn ${v.version_number === curVer ? 'active' : ''}" 
+                data-vnum="${v.version_number}" 
+                onclick="switchReviewVersion(${v.version_number}, '${v.video_path.replace(/\\/g, '/')}', '${escapeHtml(v.notes || '')}')">
+          v${v.version_number}
+        </button>
+      `).join('');
+      vMetaLabel.textContent = `v${curVer} (${job.versions.length} versions recorded)`;
+    } else if (vSelectorBox) {
+      vSelectorBox.style.display = 'none';
+    }
+
     // Populate Feedback List
     const fbContainer = document.getElementById('feedback-items-container');
     if (job.feedback && job.feedback.length > 0) {
@@ -603,13 +623,18 @@ window.openInReview = async function(jobId) {
     const vContainer = document.getElementById('version-history-container');
     if (job.versions && job.versions.length > 0) {
       vContainer.innerHTML = job.versions.map(v => `
-        <div style="margin-bottom: 10px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px;">
-          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--accent-cyan);">
-            <strong>Version ${v.version_number}</strong>
-            <span>${new Date(v.created_at).toLocaleDateString()}</span>
+        <div style="margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid var(--border-subtle);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <strong style="color: var(--accent-cyan); font-size: 0.85rem;">Version ${v.version_number}</strong>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">${new Date(v.created_at).toLocaleString()}</span>
           </div>
-          <p style="font-size: 0.82rem; margin: 4px 0;">${escapeHtml(v.notes || 'Master render')}</p>
-          <code style="font-size: 0.7rem; color: var(--text-subtle);">${v.video_path}</code>
+          <p style="font-size: 0.82rem; margin: 4px 0 8px;">${escapeHtml(v.notes || 'Master render')}</p>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <code style="font-size: 0.68rem; color: var(--text-subtle); max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${v.video_path}</code>
+            <button class="btn btn-outline" style="padding: 4px 10px; font-size: 0.72rem;" onclick="switchReviewVersion(${v.version_number}, '${v.video_path.replace(/\\/g, '/')}', '${escapeHtml(v.notes || '')}')">
+              ▶ Play v${v.version_number}
+            </button>
+          </div>
         </div>
       `).join('');
     } else {
@@ -619,6 +644,25 @@ window.openInReview = async function(jobId) {
   } catch (err) {
     alert(`Could not load video for review: ${err.message}`);
   }
+};
+
+window.switchReviewVersion = function(vNum, videoPath, notes) {
+  const player = document.getElementById('review-video-player');
+  player.src = `/media/${videoPath}`;
+  player.load();
+  player.play().catch(() => {});
+
+  const badge = document.getElementById('player-status-badge');
+  badge.textContent = `VIEWING v${vNum}`;
+
+  const vMetaLabel = document.getElementById('version-meta-label');
+  if (vMetaLabel) {
+    vMetaLabel.textContent = `Viewing v${vNum} ${notes ? '— ' + notes.slice(0, 35) : ''}`;
+  }
+
+  document.querySelectorAll('.version-pill-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.vnum === String(vNum));
+  });
 };
 
 window.jumpToVideoTime = function(sec) {
