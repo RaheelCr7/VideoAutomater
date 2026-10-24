@@ -140,6 +140,7 @@ def test_10s(
 @app.command("pilot")
 def pilot(
     output: str = typer.Option("output/episode_001", "--output", "-o", help="Directory for 80-second pilot output"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force fresh regeneration of all clips and master video"),
 ):
     """Generate the complete 80-second Beyond 80 master pilot episode."""
     from videoautomater.orchestration.pilot_runner import PilotRunner
@@ -154,7 +155,7 @@ def pilot(
 
     runner = PilotRunner(output_dir=Path(output))
     with console.status("[bold green]Executing full 80-second documentary production workflow...", spinner="dots"):
-        pilot_path = asyncio.run(runner.run_full_pilot())
+        pilot_path = asyncio.run(runner.run_full_pilot(force_regenerate=force))
 
     console.print(
         Panel.fit(

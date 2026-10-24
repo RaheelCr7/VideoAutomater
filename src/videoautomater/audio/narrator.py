@@ -16,6 +16,28 @@ from videoautomater.models.script import StoryScript
 logger = logging.getLogger(__name__)
 
 
+class SpeechSynthesisResult(tuple):
+    """Backwards-compatible tuple (duration, segments) with sentence and word boundary attributes."""
+    duration: float
+    segments: list[SubtitleSegment]
+    sentence_events: list[tuple[float, float, str]]
+    words: list[SubtitleWord]
+
+    def __new__(
+        cls,
+        duration: float,
+        segments: list[SubtitleSegment],
+        sentence_events: list[tuple[float, float, str]],
+        words: list[SubtitleWord],
+    ):
+        obj = super().__new__(cls, (duration, segments))
+        obj.duration = duration
+        obj.segments = segments
+        obj.sentence_events = sentence_events
+        obj.words = words
+        return obj
+
+
 class AudioNarrator:
     """Handles neural voiceover generation, word timestamp alignment, and ambient audio mixing."""
 
@@ -28,7 +50,7 @@ class AudioNarrator:
         script: StoryScript,
         output_wav_path: Path,
         rate: str | None = None,
-    ) -> tuple[float, list[SubtitleSegment]]:
+    ) -> SpeechSynthesisResult:
         """Synthesize script text using Edge-TTS and capture word timestamps."""
         output_wav_path.parent.mkdir(parents=True, exist_ok=True)
         temp_mp3 = output_wav_path.with_suffix(".temp.mp3")
@@ -96,7 +118,7 @@ class AudioNarrator:
             segments = SubtitleGenerator.segment_transcript(section_events)
             logger.info(f"Synthesized narration: {duration:.2f}s with {len(segments)} section-derived caption segments.")
 
-        return duration, segments
+        return SpeechSynthesisResult(duration, segments, sentence_events, words_data)
 
     def _get_audio_duration(self, audio_path: Path) -> float:
         """Read duration of an audio file in seconds."""
@@ -105,7 +127,7 @@ class AudioNarrator:
 
     def _generate_fallback_audio(
         self, script: StoryScript, output_wav_path: Path
-    ) -> tuple[float, list[SubtitleSegment]]:
+    ) -> SpeechSynthesisResult:
         """Generate offline fallback audio tone bed if network TTS is unavailable."""
         sample_rate = 48000
         duration = 80.0
@@ -116,7 +138,8 @@ class AudioNarrator:
         from videoautomater.visuals.subtitles import SubtitleGenerator
         section_events = [(sec.timeline_start, sec.timeline_end, sec.narration_text) for sec in script.sections]
         segments = SubtitleGenerator.segment_transcript(section_events)
-        return duration, segments
+        words_fallback: list[SubtitleWord] = []
+        return SpeechSynthesisResult(duration, segments, section_events, words_fallback)
 
     def generate_ambient_music(self, duration: float, output_path: Path) -> Path:
         """Synthesize a rich, cinematic ambient documentary soundscape with harmonic resolution outro."""

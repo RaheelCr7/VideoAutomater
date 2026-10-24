@@ -30,3 +30,30 @@ class StoryScript(BaseModel):
     estimated_reading_speed_wps: float = Field(description="Target 2.1 - 2.3 words/second")
     sections: list[ScriptSection] = Field(min_length=1)
     full_text: str
+
+    def align_with_narration_timing(self, sentence_events: list[tuple[float, float, str]]) -> None:
+        """Align section start/end timeline boundaries directly to measured audio sentence timings."""
+        if not sentence_events or not self.sections:
+            return
+        if len(sentence_events) == len(self.sections):
+            for i, sec in enumerate(self.sections):
+                st, et, _ = sentence_events[i]
+                sec.timeline_start = round(st, 3)
+                sec.timeline_end = round(et, 3)
+        else:
+            # Group sentence events by text matching or proportional word lengths
+            curr_s = 0
+            for sec in self.sections:
+                sec_words = len(sec.narration_text.split())
+                matched_start = sentence_events[curr_s][0] if curr_s < len(sentence_events) else 0.0
+                matched_end = matched_start
+                accum_words = 0
+                while curr_s < len(sentence_events):
+                    s_st, s_et, s_txt = sentence_events[curr_s]
+                    accum_words += len(s_txt.split())
+                    matched_end = s_et
+                    curr_s += 1
+                    if accum_words >= sec_words - 2 or curr_s == len(sentence_events):
+                        break
+                sec.timeline_start = round(matched_start, 3)
+                sec.timeline_end = round(matched_end, 3)

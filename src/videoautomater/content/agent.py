@@ -68,14 +68,14 @@ class ScriptwritingAgent:
         # Tailored dynamically to brief facts and revelations
         topic_lower = brief.topic.lower()
         if "neptune" in topic_lower or "ice giant" in topic_lower or "diamond" in topic_lower:
-            # 1. Neptune Ice Giants: Scientifically accurate (distinguishing SLAC lab facts from planetary models)
+            # 1. Neptune Ice Giants: Strictly scientifically accurate (Kraus et al. 2017, Pearl & Conrath 1991)
             sections = [
                 ScriptSection(
                     section_id="sec_01_hook",
                     timeline_start=0.0,
                     timeline_end=4.0,
                     role="HOOK",
-                    narration_text="Deep beneath Neptune’s violent storms, planetary physics predicts an extraordinary phenomenon: solid diamonds raining like hail.",
+                    narration_text="Deep inside icy planets like Neptune, laboratory physics suggests an astonishing possibility: carbon atoms separating to rain as solid diamonds.",
                     visual_intent="NASA Voyager 2 authentic approach to Neptune with intense atmospheric plunge into cyan storm clouds.",
                 ),
                 ScriptSection(
@@ -83,7 +83,7 @@ class ScriptwritingAgent:
                     timeline_start=4.0,
                     timeline_end=14.0,
                     role="MYSTERY",
-                    narration_text="When Voyager Two swept past Neptune in nineteen eighty-nine, astronomers were baffled. The planet radiated two point six times more internal heat than it absorbed from the sun. An invisible engine was driving the world from within.",
+                    narration_text="When Voyager Two flew past Neptune in nineteen eighty-nine, radiometer measurements revealed a profound puzzle: the planet radiates approximately two point six times more heat than it absorbs from the distant Sun, powered by an unconfirmed internal energy source.",
                     visual_intent="Archival Voyager 2 flyby footage and infrared thermographic anomaly scan revealing internal heat excess.",
                 ),
                 ScriptSection(
@@ -91,31 +91,31 @@ class ScriptwritingAgent:
                     timeline_start=14.0,
                     timeline_end=29.0,
                     role="REVELATION",
-                    narration_text="The crucial clue arrived at the SLAC National Accelerator Laboratory. Scientists fired ultra-intense X-ray lasers into hydrocarbon compounds to recreate ice giant interiors. For a fraction of a second, they observed methane molecules shatter, directly precipitating pure diamond crystals.",
-                    visual_intent="SLAC vacuum target chamber with laser shockwave compression and coherent 3D molecular bond rupture.",
+                    narration_text="A major breakthrough occurred at the SLAC National Accelerator Laboratory. Researchers fired optical shock lasers into hydrocarbon plastics to mimic deep planetary pressures, while femtosecond X-ray pulses captured carbon atoms freezing into nanodiamonds in real time.",
+                    visual_intent="SLAC vacuum target chamber with optical laser shockwave compression and femtosecond X-ray diffraction capture.",
                 ),
                 ScriptSection(
                     section_id="sec_04_escalation",
                     timeline_start=29.0,
                     timeline_end=50.0,
                     role="ESCALATION",
-                    narration_text="Planetary models show what happens when this occurs across an entire world. Thousands of miles deep, sinking diamond hailstones plunge through a scalding supercritical mantle. As they fall toward the core, gravitational friction releases colossal heat, finally explaining Neptune's mysterious thermal engine.",
-                    visual_intent="Planetary cross-section tracking descending diamond hailstones through supercritical fluid with convective heat plumes.",
+                    narration_text="Planetary interior models explore whether this same reaction occurs across thousands of miles of scalding mantle. Sinking diamond precipitation could theoretically release gravitational potential energy as frictional heat, offering one hypothesized contributor to Neptune's mysterious energy balance.",
+                    visual_intent="Planetary cross-section tracking modeled descending diamond crystals through supercritical fluid with thermal convection plumes.",
                 ),
                 ScriptSection(
                     section_id="sec_05_climax",
                     timeline_start=50.0,
                     timeline_end=66.0,
                     role="CLIMAX",
-                    narration_text="Over billions of years, models suggest this unrelenting precipitation has accumulated into a colossal diamond shell thousands of miles thick surrounding the core, a subterranean crystalline layer dwarfing every gemstone on Earth.",
-                    visual_intent="Subterranean core-mantle boundary showing colossal 3D faceted crystalline diamond crust with prismatic caustics.",
+                    narration_text="Over billions of years, theoretical simulations suggest these sinking crystals might gradually collect around the planet's rocky core, forming a hypothetical subterranean layer unlike any geological formation on Earth.",
+                    visual_intent="Subterranean core-mantle boundary showing modeled 3D faceted crystalline diamond accumulation layer with prismatic caustics.",
                 ),
                 ScriptSection(
                     section_id="sec_06_payoff",
                     timeline_start=66.0,
                     timeline_end=80.0,
                     role="PAYOFF",
-                    narration_text="While no probe has ever penetrated Neptune's crushing depths, the physics of diamond rain reveals how jewels can power a planetary furnace on a distant ice world.",
+                    narration_text="No spacecraft has ever penetrated Neptune's crushing depths. While diamond rain remains an unobserved planetary hypothesis, laboratory physics continues to reveal how extreme pressures transform simple matter into exotic cosmic phenomena.",
                     visual_intent="Majestic wide pullback from Neptune into deep space, framing the dark blue crescent with subtle solar rim lighting.",
                 ),
             ]
