@@ -66,55 +66,55 @@ class ScriptwritingAgent:
 
         # Standardized 6-stage narrative architecture for the topic
         # Tailored dynamically to brief facts and revelations
-        if "jupiter" in brief.topic.lower() or "diamond" in brief.topic.lower():
+        if "neptune" in brief.topic.lower() or "diamond" in brief.topic.lower() or "ice giant" in brief.topic.lower():
             sections = [
                 ScriptSection(
                     section_id="sec_01_hook",
                     timeline_start=0.0,
                     timeline_end=4.0,
                     role="HOOK",
-                    narration_text="Right now, thousands of miles beneath Jupiter's outer cloud decks, solid diamonds are literally falling from the sky like hail.",
-                    visual_intent="Deep space descent into Jupiter's swirling ammonia cloud deck with kinetic lightning bursts.",
+                    narration_text="Deep beneath Neptune’s violent storms, solid diamonds are literally falling from the sky like hail.",
+                    visual_intent="Voyager 2 authentic planetary approach to Neptune with intense atmospheric dive into cyan storm clouds.",
                 ),
                 ScriptSection(
                     section_id="sec_02_mystery",
                     timeline_start=4.0,
                     timeline_end=14.0,
                     role="MYSTERY",
-                    narration_text="For decades, planetary atmospheric spectrometers recorded an inexplicable anomaly: vast concentrations of carbon were continuously disappearing from the upper atmosphere without any clear scientific explanation.",
-                    visual_intent="Atmospheric depth cross-section illustrating disappearing carbon and methane molecules sinking downward.",
+                    narration_text="When Voyager Two swept past Neptune, astronomers were baffled. The planet radiated two point six times more internal heat than it received from the sun. An invisible engine was driving the world from within.",
+                    visual_intent="Historical archive footage of Voyager 2 flyby and infrared thermographic anomaly scan revealing internal heat excess.",
                 ),
                 ScriptSection(
                     section_id="sec_03_revelation",
                     timeline_start=14.0,
                     timeline_end=29.0,
                     role="REVELATION",
-                    narration_text="Recent high-energy laser shockwave experiments finally solved the enigma. At one hundred thousand times Earth's atmospheric pressure, crushing planetary heat rips methane molecules apart, instantly compressing pure carbon into sparkling crystalline diamonds.",
-                    visual_intent="High-pressure laser compression schematic showing tetrahedral carbon atoms locking into a diamond lattice.",
+                    narration_text="The breakthrough arrived at the SLAC National Accelerator Laboratory. Scientists fired intense X-ray lasers to simulate Neptune's interior. Under one point five million atmospheres, methane molecules shattered, and free carbon locked instantly into diamond crystals.",
+                    visual_intent="SLAC experimental vacuum chamber with laser shockwave compression and real explanatory hydrocarbon bond separation.",
                 ),
                 ScriptSection(
                     section_id="sec_04_escalation",
                     timeline_start=29.0,
                     timeline_end=50.0,
                     role="ESCALATION",
-                    narration_text="These diamond hailstones plunge thousands of miles downward through vast oceans of supercritical liquid hydrogen. As they fall, relentless atmospheric friction generates temperatures hot enough to vaporize solid steel, turning the descending gemstone boulders into a blinding, incandescent thermal storm.",
-                    visual_intent="Dramatic visualization of glowing diamond hailstones burning through superheated hydrogen fog.",
+                    narration_text="Scaled across a planetary mantle, billions of carats plunge downward through thousands of miles of scalding liquid mantle. As these gemstone hailstones sink toward the core, gravitational friction generates massive thermal energy, finally solving the planet's heat mystery.",
+                    visual_intent="Planetary cross-section tracking diamond hailstones falling through dense supercritical fluid with thermal friction dissipation.",
                 ),
                 ScriptSection(
                     section_id="sec_05_climax",
                     timeline_start=50.0,
                     timeline_end=66.0,
                     role="CLIMAX",
-                    narration_text="At thirty thousand miles deep, the crushing pressure reaches millions of atmospheres. Here, the diamonds melt into colossal subterranean seas of liquid carbon, where giant diamond icebergs float upon an endless glowing ocean.",
-                    visual_intent="Cinematic subterranean sea of liquid diamond with floating diamond bergs under crushing planetary clouds.",
+                    narration_text="Over billions of years, this unrelenting hail has accumulated into a colossal solid diamond shell thousands of miles thick surrounding the core, a subterranean crystalline layer unlike anything known in our solar system.",
+                    visual_intent="Subterranean core boundary reveal showing titanic solid diamond crystalline crust with prismatic light reflections.",
                 ),
                 ScriptSection(
                     section_id="sec_06_payoff",
                     timeline_start=66.0,
                     timeline_end=80.0,
                     role="PAYOFF",
-                    narration_text="In our vast universe, what we cherish as the rarest gemstones on Earth are nothing more than an ordinary afternoon thunderstorm deep inside Jupiter.",
-                    visual_intent="Slow majestic cosmic pullback from Jupiter into the dark starry cosmos with closing typography.",
+                    narration_text="Neptune's violent storms are powered by falling jewels. What we treasure as our rarest gems are simply the fuel driving an alien ice giant.",
+                    visual_intent="Majestic pullback from Neptune into deep space, connecting the opening paradox to cosmic perspective.",
                 ),
             ]
         else:
