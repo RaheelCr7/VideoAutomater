@@ -46,8 +46,14 @@ class ContentResearchAgent:
             cand.scores.calculate_composite()
             valid_candidates.append(cand)
 
-        # Sort descending by composite score
-        valid_candidates.sort(key=lambda x: x.scores.composite_score, reverse=True)
+        if not valid_candidates:
+            logger.warning("All candidate topics found in history. Recycling top evergreen candidate.")
+            for cand in candidates:
+                cand.scores.freshness_originality *= 0.5
+                cand.scores.calculate_composite()
+                valid_candidates.append(cand)
+            valid_candidates.sort(key=lambda x: x.scores.composite_score, reverse=True)
+
         return valid_candidates
 
     def produce_research_brief(self, requested_topic: str | None = None) -> tuple[ResearchBrief, list[CandidateTopic]]:
