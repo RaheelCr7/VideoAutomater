@@ -64,6 +64,84 @@ class AudioNarrator:
         Fails explicitly if speech synthesis fails; never substitutes tone or silent track.
         """
         output_wav_path.parent.mkdir(parents=True, exist_ok=True)
+        from videoautomater.visuals.subtitles import SubtitleGenerator
+
+        # Multi-section spaced synthesis for structured 80s storyboard documentary
+        if len(script.sections) >= 6 and script.sections[-1].timeline_start >= 45.0:
+            sample_rate = 48000
+            total_target_sec = max(80.0, script.sections[-1].timeline_end)
+            total_samples = int(sample_rate * total_target_sec)
+            master_audio = np.zeros((total_samples, 2), dtype=np.float32)
+            words_data: list[SubtitleWord] = []
+            sentence_events: list[tuple[float, float, str]] = []
+
+            for idx, sec in enumerate(script.sections):
+                sec_text = sec.narration_text.strip()
+                if not sec_text:
+                    continue
+                temp_sec_mp3 = output_wav_path.parent / f"sec_{idx}_{output_wav_path.stem}.mp3"
+                temp_sec_wav = output_wav_path.parent / f"sec_{idx}_{output_wav_path.stem}.wav"
+
+                speech_rate = rate or "-3%"
+                communicate = edge_tts.Communicate(
+                    text=sec_text,
+                    voice=self.voice,
+                    rate=speech_rate,
+                    volume="+0%",
+                    boundary="WordBoundary",
+                )
+                sec_words = []
+                try:
+                    with open(temp_sec_mp3, "wb") as f:
+                        async for chunk in communicate.stream():
+                            if chunk["type"] == "audio":
+                                f.write(chunk["data"])
+                            elif chunk["type"] == "WordBoundary":
+                                w_st = chunk["offset"] / 10_000_000.0
+                                w_dur = chunk["duration"] / 10_000_000.0
+                                sec_words.append((chunk["text"], w_st, w_dur))
+                except Exception as exc:
+                    logger.error(f"TTS section {idx} error: {exc}")
+                    raise NarrationSynthesisError(f"Neural narration failed on section {idx}: {exc}")
+
+                if not temp_sec_mp3.exists() or temp_sec_mp3.stat().st_size < 100:
+                    raise NarrationSynthesisError(f"TTS section {idx} emitted zero bytes.")
+
+                subprocess.run([
+                    self.ffmpeg_bin, "-y", "-i", str(temp_sec_mp3),
+                    "-ar", "48000", "-ac", "2", str(temp_sec_wav)
+                ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if temp_sec_mp3.exists():
+                    temp_sec_mp3.unlink()
+
+                sec_audio, sr = sf.read(str(temp_sec_wav))
+                if temp_sec_wav.exists():
+                    temp_sec_wav.unlink()
+
+                # Voice starts 0.4s into the scene
+                offset_sec = sec.timeline_start + 0.4
+                start_samp = int(offset_sec * sample_rate)
+                end_samp = min(total_samples, start_samp + len(sec_audio))
+                master_audio[start_samp:end_samp] += sec_audio[:end_samp - start_samp]
+
+                for w_txt, w_st, w_dur in sec_words:
+                    words_data.append(SubtitleWord(
+                        word=w_txt,
+                        start_time=round(offset_sec + w_st, 3),
+                        end_time=round(offset_sec + w_st + w_dur, 3),
+                    ))
+                actual_sec_dur = len(sec_audio) / float(sample_rate)
+                sentence_events.append((round(offset_sec, 3), round(offset_sec + actual_sec_dur, 3), sec_text))
+
+            sf.write(str(output_wav_path), master_audio, sample_rate)
+            duration = total_target_sec
+            segments = SubtitleGenerator.segment_words(words_data)
+            logger.info(
+                f"Synthesized section-spaced neural narration: {duration:.2f}s, "
+                f"{len(words_data)} words across {len(script.sections)} scenes, {len(segments)} segments."
+            )
+            return SpeechSynthesisResult(duration, segments, sentence_events, words_data, "SECTION_SPACED_TTS_WORD_BOUNDARIES")
+
         temp_mp3 = output_wav_path.with_suffix(".temp.mp3")
 
         speech_rate = rate or ("+11%" if script.total_spoken_words > 140 else "+0%")
@@ -119,8 +197,6 @@ class AudioNarrator:
         duration = self._get_audio_duration(output_wav_path)
         if duration <= 0.0:
             raise NarrationSynthesisError("Synthesized WAV duration is 0.0 seconds.")
-
-        from videoautomater.visuals.subtitles import SubtitleGenerator
 
         sentence_events: list[tuple[float, float, str]] = []
         if words_data:

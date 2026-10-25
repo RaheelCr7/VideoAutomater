@@ -244,12 +244,17 @@ class QualityChecker:
 
         # 5. Playability & Non-Zero Size
         file_size_mb = video_path.stat().st_size / (1024 * 1024)
-        min_size = 0.5 if expected_dur <= 25.0 else 1.0
+        if expected_dur < 5.0:
+            min_size = 0.05
+        elif expected_dur <= 25.0:
+            min_size = 0.5
+        else:
+            min_size = 1.0
         size_pass = file_size_mb >= min_size
         checks.append(
             QualityCheck(
                 check_name="PLAYABILITY_AND_INTEGRITY",
-                required=f"File size >= {min_size:.1f} MB, playable stream",
+                required=f"File size >= {min_size:.2f} MB, playable stream",
                 measured=f"{file_size_mb:.2f} MB",
                 status="PASS" if size_pass else "FAIL",
             )

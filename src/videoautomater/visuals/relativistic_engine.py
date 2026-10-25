@@ -189,88 +189,391 @@ class RelativisticOpticsEngine:
         alpha_grid[escaped] = np.interp(r_impact_grid[escaped], self._lookup_b, self._lookup_alpha).astype(np.float32)
         return alpha_grid
 
-    def generate_simulation_frame(
-        self,
-        t_sec: float,
-        total_duration: float,
-        stage: str = "CLIMAX",
-        camera_angle_deg: float = 0.0,
-        doppler_enhancement: float = 1.0,
-        scene_heading: str = "SCHWARZSCHILD NULL GEODESIC LENSING"
-    ) -> Image.Image:
+    def _draw_starfield(self, draw: ImageDraw.ImageDraw, sim_w: int, sim_h: int, seed: int = 42, t_sec: float = 0.0) -> None:
+        """Renders authentic deep-space multi-magnitude starfield with subtle twinkling."""
+        np.random.seed(seed)
+        for i in range(180):
+            sx = int(np.random.randint(15, sim_w - 15))
+            sy = int(np.random.randint(25, sim_h - 25))
+            mag = float(np.random.uniform(0.5, 2.8))
+            twinkle = 0.85 + 0.15 * math.sin(t_sec * 3.5 + i * 0.7)
+            b = int(np.random.randint(130, 255) * twinkle)
+            tone = i % 4
+            if tone == 0:
+                col = (b, b, min(255, int(b * 1.2)))
+            elif tone == 1:
+                col = (min(255, int(b * 1.15)), b, int(b * 0.85))
+            else:
+                col = (b, b, b)
+            r = int(mag)
+            if r <= 1:
+                draw.point((sx, sy), fill=col)
+            else:
+                draw.ellipse([sx - r, sy - r, sx + r, sy + r], fill=col)
+
+    def _draw_minimal_header(self, draw: ImageDraw.ImageDraw, shot_title: str, sub_title: str = "") -> None:
+        """Renders minimal Beyond 80 editorial branding without HUD telemetry clutter."""
+        font_brand = self._get_font(24)
+        font_sub = self._get_font(20)
+        draw.text((80, 110), f"BEYOND 80 // {shot_title.upper()}", fill=(0, 210, 255), font=font_brand)
+        if sub_title:
+            draw.text((80, 146), sub_title.upper(), fill=(245, 158, 11), font=font_sub)
+
+    def _generate_shot_01_mystery(self, t_sec: float, total_duration: float) -> Image.Image:
         """
-        Renders a physically validated frame of Schwarzschild spacetime geometry with
-        numerically integrated null geodesic deflection, dynamic Keplerian accretion flow,
-        Doppler beaming asymmetry (δ^4), and gravitational redshift.
+        Shot 1 (0-10s): The Mystery.
+        Observer viewpoint: A distant background star moves behind a black hole silhouette.
+        Demonstrates that gravitational deflection prevents total disappearance.
+        """
+        img = Image.new("RGB", (self.width, self.height), (4, 6, 12))
+        draw = ImageDraw.Draw(img)
+        self._draw_starfield(draw, self.width, self.height, seed=101, t_sec=t_sec)
+
+        cx, cy = self.width // 2, self.height // 2 - 40
+        r_shadow = 145
+
+        norm_t = min(1.0, max(0.0, t_sec / max(0.1, total_duration)))
+        star_x = int(cx - 360 + norm_t * 540)
+        star_y = int(cy - 120 + norm_t * 180)
+
+        dx = star_x - cx
+        dy = star_y - cy
+        d_star = math.hypot(dx, dy)
+        r_einstein = 190.0
+
+        for r_glow in range(r_shadow + 24, r_shadow, -2):
+            draw.ellipse([cx - r_glow, cy - r_glow, cx + r_glow, cy + r_glow], outline=(15, 45, 90))
+        draw.ellipse([cx - r_shadow, cy - r_shadow, cx + r_shadow, cy + r_shadow], fill=(1, 2, 4), outline=(30, 60, 110), width=2)
+
+        if d_star > 5.0:
+            phi = math.atan2(dy, dx)
+            r_plus = 0.5 * (d_star + math.sqrt(d_star**2 + 4.0 * r_einstein**2))
+            r_minus = 0.5 * (math.sqrt(d_star**2 + 4.0 * r_einstein**2) - d_star)
+
+            if d_star < 240.0:
+                arc_span = math.radians(110.0 * (1.0 - d_star / 240.0) + 15.0)
+                p_deg1 = math.degrees(phi - arc_span)
+                p_deg2 = math.degrees(phi + arc_span)
+                draw.arc([cx - r_plus, cy - r_plus, cx + r_plus, cy + r_plus], int(p_deg1), int(p_deg2), fill=(255, 230, 160), width=6)
+                s_phi = phi + math.pi
+                s_deg1 = math.degrees(s_phi - arc_span * 0.75)
+                s_deg2 = math.degrees(s_phi + arc_span * 0.75)
+                draw.arc([cx - r_minus, cy - r_minus, cx + r_minus, cy + r_minus], int(s_deg1), int(s_deg2), fill=(210, 180, 120), width=4)
+
+            p_x = int(cx + r_plus * math.cos(phi))
+            p_y = int(cy + r_plus * math.sin(phi))
+            draw.line([(p_x - 30, p_y), (p_x + 30, p_y)], fill=(255, 240, 180), width=2)
+            draw.line([(p_x, p_y - 30), (p_x, p_y + 30)], fill=(255, 240, 180), width=2)
+            draw.ellipse([p_x - 10, p_y - 10, p_x + 10, p_y + 10], fill=(255, 255, 240), outline=(255, 210, 80), width=2)
+
+            s_x = int(cx - r_minus * math.cos(phi))
+            s_y = int(cy - r_minus * math.sin(phi))
+            draw.line([(s_x - 16, s_y), (s_x + 16, s_y)], fill=(200, 220, 255), width=2)
+            draw.line([(s_x, s_y - 16), (s_x, s_y + 16)], fill=(200, 220, 255), width=2)
+            draw.ellipse([s_x - 6, s_y - 6, s_x + 6, s_y + 6], fill=(220, 240, 255), outline=(100, 160, 255), width=2)
+
+        self._draw_minimal_header(draw, "THE MYSTERY", "STAR OCCULTATION // LIGHT BENDS AROUND GRAVITATIONAL MASS")
+        draw.text((80, self.height - 320), "OBSERVER VIEW: GRAVITATIONAL DEFLECTION PREVENTS TOTAL SHADOWING", fill=(148, 163, 184), font=self._get_font(20))
+        return img
+
+    def _generate_shot_02_spacetime_geometry(self, t_sec: float, total_duration: float) -> Image.Image:
+        """
+        Shot 2 (10-19s): Why Light Bends.
+        3D perspective explanatory view showing Light Source, Black Hole gravitational well,
+        Observer, and animated photon packets propagating along curved null geodesics.
+        """
+        img = Image.new("RGB", (self.width, self.height), (5, 7, 14))
+        draw = ImageDraw.Draw(img)
+        self._draw_starfield(draw, self.width, self.height, seed=202, t_sec=t_sec)
+
+        cx, cy = self.width // 2, self.height // 2 - 20
+        theta_cam = math.radians(28.0 + (t_sec / max(0.1, total_duration)) * 10.0)
+
+        grid_range = np.linspace(-4.5, 4.5, 19)
+        coords_2d = {}
+
+        for u in grid_range:
+            for v in grid_range:
+                r_sq = u**2 + v**2
+                w = -2.8 / math.sqrt(r_sq + 0.65) * math.exp(-r_sq / 16.0)
+                xr = u * math.cos(theta_cam) - v * math.sin(theta_cam)
+                yr = u * math.sin(theta_cam) + v * math.cos(theta_cam)
+                sx = int(cx + xr * 84.0)
+                sy = int(cy + yr * 46.0 - w * 72.0)
+                coords_2d[(round(u, 2), round(v, 2))] = (sx, sy)
+
+        for u in grid_range:
+            pts = [coords_2d[(round(u, 2), round(v, 2))] for v in grid_range]
+            for i in range(len(pts) - 1):
+                draw.line([pts[i], pts[i+1]], fill=(32, 65, 110), width=1)
+        for v in grid_range:
+            pts = [coords_2d[(round(u, 2), round(v, 2))] for u in grid_range]
+            for i in range(len(pts) - 1):
+                draw.line([pts[i], pts[i+1]], fill=(32, 65, 110), width=1)
+
+        bh_center = coords_2d[(0.0, 0.0)]
+        for r_b in range(70, 0, -2):
+            draw.ellipse([bh_center[0] - r_b, bh_center[1] - r_b, bh_center[0] + r_b, bh_center[1] + r_b], fill=(0, 0, 0), outline=(20, 50, 90))
+
+        src_pt = coords_2d[(round(grid_range[2], 2), round(grid_range[3], 2))]
+        draw.line([(src_pt[0] - 35, src_pt[1]), (src_pt[0] + 35, src_pt[1])], fill=(255, 220, 100), width=3)
+        draw.line([(src_pt[0], src_pt[1] - 35), (src_pt[0], src_pt[1] + 35)], fill=(255, 220, 100), width=3)
+        draw.ellipse([src_pt[0] - 14, src_pt[1] - 14, src_pt[0] + 14, src_pt[1] + 14], fill=(255, 255, 220), outline=(245, 158, 11), width=3)
+
+        obs_pt = coords_2d[(round(grid_range[-3], 2), round(grid_range[-4], 2))]
+        draw.rectangle([obs_pt[0] - 16, obs_pt[1] - 16, obs_pt[0] + 16, obs_pt[1] + 16], outline=(16, 185, 129), width=3)
+        draw.line([(obs_pt[0] - 24, obs_pt[1]), (obs_pt[0] + 24, obs_pt[1])], fill=(16, 185, 129), width=2)
+        draw.line([(obs_pt[0], obs_pt[1] - 24), (obs_pt[0], obs_pt[1] + 24)], fill=(16, 185, 129), width=2)
+
+        curve_pts = []
+        for s in np.linspace(0.0, 1.0, 40):
+            px = src_pt[0] * (1.0 - s) + obs_pt[0] * s
+            py = src_pt[1] * (1.0 - s) + obs_pt[1] * s
+            pull = math.sin(s * math.pi) * 110.0
+            curve_pts.append((int(px), int(py + pull)))
+
+        for i in range(len(curve_pts) - 1):
+            draw.line([curve_pts[i], curve_pts[i+1]], fill=(0, 210, 255), width=4)
+
+        for k in range(4):
+            frac = (t_sec * 0.38 + k * 0.25) % 1.0
+            idx = int(frac * (len(curve_pts) - 1))
+            pkt = curve_pts[idx]
+            draw.ellipse([pkt[0] - 9, pkt[1] - 9, pkt[0] + 9, pkt[1] + 9], fill=(255, 255, 255), outline=(245, 158, 11), width=3)
+
+        self._draw_minimal_header(draw, "WHY LIGHT BENDS", "3D SPACETIME CURVATURE // PHOTONS FOLLOW NULL GEODESICS")
+        font_label = self._get_font(22)
+        draw.text((src_pt[0] - 80, src_pt[1] - 50), "LIGHT SOURCE (STAR)", fill=(255, 220, 100), font=font_label)
+        draw.text((bh_center[0] - 80, bh_center[1] + 75), "WARPED SPACETIME", fill=(0, 210, 255), font=font_label)
+        draw.text((obs_pt[0] - 40, obs_pt[1] + 32), "OBSERVER", fill=(16, 185, 129), font=font_label)
+        return img
+
+    def _generate_shot_03_dual_trajectories(self, t_sec: float, total_duration: float) -> Image.Image:
+        """
+        Shot 3 (19-28s): Dual Trajectories.
+        3D tracking of light splitting around opposite sides of the gravitational lens toward observer.
+        """
+        img = Image.new("RGB", (self.width, self.height), (4, 6, 12))
+        draw = ImageDraw.Draw(img)
+        self._draw_starfield(draw, self.width, self.height, seed=303, t_sec=t_sec)
+
+        cx, cy = self.width // 2, self.height // 2 - 20
+        r_shadow = 130
+        r_photon = 190
+
+        draw.ellipse([cx - r_photon, cy - r_photon, cx + r_photon, cy + r_photon], outline=(0, 210, 255), width=2)
+        draw.ellipse([cx - r_shadow, cy - r_shadow, cx + r_shadow, cy + r_shadow], fill=(2, 3, 6), outline=(220, 38, 38), width=3)
+
+        y_top = cy - 480
+        y_bot = cy + 480
+
+        left_curve = []
+        right_curve = []
+        for s in np.linspace(0.0, 1.0, 50):
+            y = y_top + s * (y_bot - y_top)
+            curve_factor = math.sin(s * math.pi)
+            xl = cx - curve_factor * 260.0
+            xr = cx + curve_factor * 260.0
+            left_curve.append((int(xl), int(y)))
+            right_curve.append((int(xr), int(y)))
+
+        for i in range(len(left_curve) - 1):
+            draw.line([left_curve[i], left_curve[i+1]], fill=(0, 210, 255), width=5)
+            draw.line([right_curve[i], right_curve[i+1]], fill=(245, 158, 11), width=5)
+
+        for k in range(3):
+            frac = (t_sec * 0.42 + k * 0.33) % 1.0
+            idx = int(frac * (len(left_curve) - 1))
+            pl = left_curve[idx]
+            pr = right_curve[idx]
+            draw.ellipse([pl[0] - 10, pl[1] - 10, pl[0] + 10, pl[1] + 10], fill=(255, 255, 255), outline=(0, 210, 255), width=3)
+            draw.ellipse([pr[0] - 10, pr[1] - 10, pr[0] + 10, pr[1] + 10], fill=(255, 255, 255), outline=(245, 158, 11), width=3)
+
+        self._draw_minimal_header(draw, "DUAL TRAJECTORIES", "LIGHT SPLITS AND BENDS AROUND OPPOSITE FLANKS")
+        font_callout = self._get_font(22)
+        draw.text((cx - 440, cy - 10), "PATH A: LEFT LIMB DEFLECTION", fill=(0, 210, 255), font=font_callout)
+        draw.text((cx + 120, cy - 10), "PATH B: RIGHT LIMB DEFLECTION", fill=(245, 158, 11), font=font_callout)
+        draw.text((cx - 100, y_bot + 25), "CONVERGING ON OBSERVER", fill=(16, 185, 129), font=font_callout)
+        return img
+
+    def _generate_shot_04_multiple_images(self, t_sec: float, total_duration: float) -> Image.Image:
+        """
+        Shot 4 (28-37s): Multiple Apparent Images.
+        Observer telescope view showing single background star appearing as twin mirrored images.
+        """
+        img = Image.new("RGB", (self.width, self.height), (3, 5, 10))
+        draw = ImageDraw.Draw(img)
+        self._draw_starfield(draw, self.width, self.height, seed=404, t_sec=t_sec)
+
+        cx, cy = self.width // 2, self.height // 2 - 30
+
+        r_reticle = 400
+        draw.ellipse([cx - r_reticle, cy - r_reticle, cx + r_reticle, cy + r_reticle], outline=(25, 45, 75), width=2)
+        draw.line([(cx - r_reticle - 20, cy), (cx + r_reticle + 20, cy)], fill=(25, 45, 75), width=1)
+        draw.line([(cx, cy - r_reticle - 20), (cx, cy + r_reticle + 20)], fill=(25, 45, 75), width=1)
+
+        draw.ellipse([cx - 130, cy - 130, cx + 130, cy + 130], fill=(0, 0, 0), outline=(35, 70, 120), width=2)
+
+        draw.ellipse([cx - 18, cy - 18, cx + 18, cy + 18], outline=(148, 163, 184), width=2)
+        draw.text((cx - 140, cy + 145), "TRUE POSITION (OCCLUDED BEHIND LENS)", fill=(148, 163, 184), font=self._get_font(18))
+
+        im1_x, im1_y = cx - 240, cy
+        im2_x, im2_y = cx + 240, cy
+
+        draw.line([(cx, cy + 380), (im1_x, im1_y)], fill=(0, 210, 255), width=2)
+        draw.line([(cx, cy + 380), (im2_x, im2_y)], fill=(245, 158, 11), width=2)
+
+        draw.line([(im1_x - 30, im1_y), (im1_x + 30, im1_y)], fill=(200, 240, 255), width=3)
+        draw.line([(im1_x, im1_y - 30), (im1_x, im1_y + 30)], fill=(200, 240, 255), width=3)
+        draw.ellipse([im1_x - 12, im1_y - 12, im1_x + 12, im1_y + 12], fill=(255, 255, 255), outline=(0, 210, 255), width=3)
+
+        draw.line([(im2_x - 30, im2_y), (im2_x + 30, im2_y)], fill=(255, 230, 180), width=3)
+        draw.line([(im2_x, im2_y - 30), (im2_x, im2_y + 30)], fill=(255, 230, 180), width=3)
+        draw.ellipse([im2_x - 12, im2_y - 12, im2_x + 12, im2_y + 12], fill=(255, 255, 255), outline=(245, 158, 11), width=3)
+
+        self._draw_minimal_header(draw, "MULTIPLE APPARENT IMAGES", "STRAIGHT-LINE SIGHT LINES FORM TWIN VIRTUAL IMAGES")
+        font_c = self._get_font(22)
+        draw.text((im1_x - 90, im1_y - 50), "APPARENT IMAGE 1", fill=(0, 210, 255), font=font_c)
+        draw.text((im2_x - 70, im2_y - 50), "APPARENT IMAGE 2", fill=(245, 158, 11), font=font_c)
+        draw.text((80, self.height - 320), "TELESCOPE VIEW: ONE BACKGROUND STAR PERCEIVED AS TWO INDEPENDENT SOURCES", fill=(200, 220, 240), font=self._get_font(20))
+        return img
+
+    def _generate_shot_05_einstein_ring(self, t_sec: float, total_duration: float) -> Image.Image:
+        """
+        Shot 5 (37-48s): Einstein-Ring Reveal.
+        Dynamic alignment animation showing changing alignment smearing twin arcs into a complete glowing Einstein ring.
+        """
+        img = Image.new("RGB", (self.width, self.height), (3, 5, 10))
+        draw = ImageDraw.Draw(img)
+        self._draw_starfield(draw, self.width, self.height, seed=505, t_sec=t_sec)
+
+        cx, cy = self.width // 2, self.height // 2 - 30
+        r_einstein = 220.0
+        r_shadow = 140
+
+        norm_t = t_sec / max(0.1, total_duration)
+        beta = 2.0 * math.cos(math.pi * norm_t)
+        abs_beta = abs(beta)
+
+        draw.ellipse([cx - r_shadow, cy - r_shadow, cx + r_shadow, cy + r_shadow], fill=(0, 0, 0), outline=(25, 45, 80), width=2)
+
+        if abs_beta < 0.28:
+            ring_pulse = 1.0 + 0.08 * math.sin(t_sec * 8.0)
+            for w_r in range(12, 1, -2):
+                glow_val = int(240 * (1.0 - w_r / 12.0) * ring_pulse)
+                draw.ellipse([cx - r_einstein - w_r, cy - r_einstein - w_r, cx + r_einstein + w_r, cy + r_einstein + w_r],
+                             outline=(glow_val, int(glow_val * 0.88), int(glow_val * 0.5)), width=2)
+            draw.ellipse([cx - r_einstein, cy - r_einstein, cx + r_einstein, cy + r_einstein], outline=(255, 255, 255), width=4)
+            status_text = "ALIGNMENT: 0.00° // PERFECT COLINEARITY -> COMPLETE EINSTEIN RING"
+        else:
+            arc_span = max(25.0, 160.0 * (1.0 - abs_beta / 2.2))
+            draw.arc([cx - r_einstein, cy - r_einstein, cx + r_einstein, cy + r_einstein],
+                     int(180 - arc_span), int(180 + arc_span), fill=(255, 230, 150), width=6)
+            draw.arc([cx - r_einstein, cy - r_einstein, cx + r_einstein, cy + r_einstein],
+                     int(-arc_span), int(arc_span), fill=(210, 190, 120), width=4)
+            status_text = f"ALIGNMENT: {abs_beta * 0.8:.2f}° // ASYMMETRICAL LUMINOUS ARCS"
+
+        self._draw_minimal_header(draw, "EINSTEIN-RING REVEAL", status_text)
+        draw.text((80, self.height - 320), "PERFECT SOURCE-LENS-OBSERVER ALIGNMENT PRODUCES COMPLETE CIRCULAR RING", fill=(200, 220, 240), font=self._get_font(20))
+        return img
+
+    def _generate_shot_06_shadow_cross_section(self, t_sec: float, total_duration: float) -> Image.Image:
+        """
+        Shot 6 (48-58s): The Black-Hole Shadow.
+        Scientifically defensible cross-section comparing Event Horizon, Photon Sphere, and Shadow Boundary.
+        """
+        img = Image.new("RGB", (self.width, self.height), (4, 6, 12))
+        draw = ImageDraw.Draw(img)
+        self._draw_starfield(draw, self.width, self.height, seed=606, t_sec=t_sec)
+
+        cx, cy = self.width // 2, self.height // 2 - 20
+        r_horizon = 95
+        r_photon = 142
+        r_shadow = 247
+
+        draw.ellipse([cx - r_shadow, cy - r_shadow, cx + r_shadow, cy + r_shadow], outline=(245, 158, 11), width=2)
+        draw.ellipse([cx - r_photon, cy - r_photon, cx + r_photon, cy + r_photon], outline=(0, 210, 255), width=2)
+        draw.ellipse([cx - r_horizon, cy - r_horizon, cx + r_horizon, cy + r_horizon], fill=(0, 0, 0), outline=(220, 38, 38), width=3)
+
+        cap_pts = []
+        for s in np.linspace(0.0, 1.0, 30):
+            y = cy - 450 + s * 450
+            x = cx - 180 + s**2 * 120
+            cap_pts.append((int(x), int(y)))
+        for i in range(len(cap_pts) - 1):
+            draw.line([cap_pts[i], cap_pts[i+1]], fill=(220, 38, 38), width=3)
+
+        esc_pts = []
+        for s in np.linspace(0.0, 1.0, 40):
+            y = cy - 450 + s * 900
+            curve = math.sin(s * math.pi) * 110
+            esc_pts.append((int(cx + 310 - curve), int(y)))
+        for i in range(len(esc_pts) - 1):
+            draw.line([esc_pts[i], esc_pts[i+1]], fill=(16, 185, 129), width=3)
+
+        self._draw_minimal_header(draw, "THE BLACK-HOLE SHADOW", "SCIENTIFIC SCALE COMPARISON // HORIZON VS PHOTON SPHERE VS SHADOW")
+        font_sc = self._get_font(22)
+        draw.text((cx - r_horizon + 15, cy - 10), "EVENT HORIZON: r = 2M", fill=(220, 38, 38), font=font_sc)
+        draw.text((cx - r_photon - 20, cy - r_photon - 32), "PHOTON SPHERE: r = 3M", fill=(0, 210, 255), font=font_sc)
+        draw.text((cx - r_shadow - 20, cy - r_shadow - 32), "APPARENT SHADOW: b = 5.2M", fill=(245, 158, 11), font=font_sc)
+        draw.text((80, self.height - 320), "RAYS PASSING INSIDE b_crit ARE SWALLOWED, DEFINING THE SHADOW BOUNDARY", fill=(200, 220, 240), font=self._get_font(20))
+        return img
+
+    def _generate_shot_07_accretion_disk(self, t_sec: float, total_duration: float, doppler_enhancement: float = 1.0) -> Image.Image:
+        """
+        Shot 7 (58-70s): Relativistic Accretion Disk.
+        3D rotating Keplerian accretion disk with prominent relativistic Doppler beaming asymmetry.
         """
         sim_w = self.width // 2
         sim_h = self.height // 2
         cx, cy = sim_w // 2, sim_h // 2 - 30
 
-        # Physical units: r_s = 1.0, M = 0.5 r_s
         M = 0.5
-        b_crit = 3.0 * math.sqrt(3.0) * M   # ≈ 2.598076 r_s
+        b_crit = 3.0 * math.sqrt(3.0) * M
         r_shadow = b_crit
-        r_photon_sphere = 1.5               # 3M = 1.5 r_s
-        r_isco = 3.0                        # 6M = 3.0 r_s
+        r_photon_sphere = 1.5
+        r_isco = 3.0
         r_outer_disk = 7.5
 
         y_indices, x_indices = np.indices((sim_h, sim_w))
         x_norm = (x_indices - cx) / (sim_w * 0.16)
         y_norm = (y_indices - cy) / (sim_w * 0.16)
 
-        # Smooth camera orbit around black hole
-        theta_cam = math.radians(camera_angle_deg + (t_sec / total_duration) * 35.0)
+        theta_cam = math.radians(15.0 + (t_sec / max(0.1, total_duration)) * 35.0)
         x_rot = x_norm * math.cos(theta_cam) - y_norm * math.sin(theta_cam)
         y_rot = x_norm * math.sin(theta_cam) + y_norm * math.cos(theta_cam)
 
         r_impact = np.sqrt(x_rot**2 + y_rot**2) + 1e-6
-
-        # 1. Exact Numerically Integrated Null Geodesic Deflection Vector
         alpha_deflect = self.compute_fast_deflection_grid(r_impact, M=M)
         beta_x = x_rot - alpha_deflect * (x_rot / r_impact)
         beta_y = y_rot - alpha_deflect * (y_rot / r_impact)
 
-        # Background celestial starfield and coordinate grid distorted by genuine lensing
-        grid_pattern = (np.sin(beta_x * 8.0) * np.sin(beta_y * 8.0)) > 0.965
         stars = (np.sin(beta_x * 45.0 + 1.2) * np.cos(beta_y * 45.0 + 2.1)) > 0.988
-
         frame_rgb = np.zeros((sim_h, sim_w, 3), dtype=np.float32)
-        frame_rgb[grid_pattern, :] = [0.08, 0.14, 0.24]
         frame_rgb[stars, :] = [0.85, 0.92, 1.0]
 
-        # 2. Accretion Disk Physics (Equatorial plane viewed at 70° inclination)
-        inclination = math.radians(70.0)
+        inclination = math.radians(75.0)
         y_disk = y_rot / math.cos(inclination)
         r_disk = np.sqrt(x_rot**2 + y_disk**2) + 1e-6
         phi_disk = np.arctan2(y_disk, x_rot)
 
         in_disk = (r_disk >= r_isco) & (r_disk <= r_outer_disk) & (r_impact > r_shadow * 0.96)
-
-        # Keplerian velocity: v(r) = sqrt(M / r) = sqrt(0.5 / r_disk)
         v_kepler = np.sqrt(0.5 / np.maximum(r_isco, r_disk))
-        # Line-of-sight velocity component (positive = approaching on left limb, x < 0)
         v_los = v_kepler * np.sin(phi_disk) * math.sin(inclination)
         gamma = 1.0 / np.sqrt(np.maximum(0.01, 1.0 - v_kepler**2))
-
-        # Relativistic Doppler Beaming Factor: delta = 1 / [ gamma * (1 - v_los) ]
         delta = 1.0 / (gamma * (1.0 - v_los * 0.94) + 1e-5)
-        # Combined Doppler boost delta^4 and gravitational redshift factor sqrt(1 - 2M/r)
         grav_redshift = np.sqrt(np.maximum(0.01, 1.0 - (2.0 * M / np.maximum(r_isco, r_disk))))
         doppler_factor = np.power(delta, 4.0 * doppler_enhancement) * grav_redshift
 
-        # Spiral orbital plasma rotation over time
         phase = phi_disk - (3.8 * t_sec / np.sqrt(np.maximum(1.0, r_disk)))
         plasma_density = 0.5 + 0.5 * np.cos(3.0 * phase) * np.exp(-(r_disk - r_isco) / 2.2)
         temp_gradient = np.power(r_isco / np.maximum(r_isco, r_disk), 0.75)
         disk_intensity = np.where(in_disk, plasma_density * temp_gradient * doppler_factor, 0.0)
 
-        # Approaching limb (x < 0) is blue-white intense; receding limb (x > 0) is dim amber-red
         disk_r = disk_intensity * np.where(x_rot < 0, 0.92, 1.0)
         disk_g = disk_intensity * np.where(x_rot < 0, 0.88, 0.50)
         disk_b = disk_intensity * np.where(x_rot < 0, 1.0, 0.18)
 
-        # 3. Lensed Secondary Accretion Ring (Light curving over/under the horizon)
         lensed_ring_mask = (r_impact >= r_photon_sphere * 1.04) & (r_impact <= r_photon_sphere * 1.58)
         secondary_intensity = np.where(lensed_ring_mask, 0.52 * np.exp(-((r_impact - r_photon_sphere * 1.25) ** 2) / 0.05), 0.0)
 
@@ -278,39 +581,104 @@ class RelativisticOpticsEngine:
         frame_rgb[:, :, 1] += np.clip(disk_g + secondary_intensity * 0.78, 0.0, 1.0)
         frame_rgb[:, :, 2] += np.clip(disk_b + secondary_intensity * 0.42, 0.0, 1.0)
 
-        # 4. Photon Ring (Infinite winding divergence at b_crit = sqrt(27)*M)
-        photon_ring_width = 0.05
-        photon_ring = np.exp(-((r_impact - r_shadow) ** 2) / (photon_ring_width ** 2))
+        photon_ring = np.exp(-((r_impact - r_shadow) ** 2) / (0.05 ** 2))
         frame_rgb[:, :, 0] += photon_ring * 0.98
         frame_rgb[:, :, 1] += photon_ring * 0.90
         frame_rgb[:, :, 2] += photon_ring * 0.72
 
-        # 5. Black Hole Shadow Boundary (Rays with b <= b_crit are absorbed into singularity)
         shadow_mask = r_impact < (r_shadow - 0.015)
         frame_rgb[shadow_mask, :] = [0.003, 0.003, 0.006]
 
-        # Upscale float buffer to 1080x1920
         frame_uint8 = np.clip(frame_rgb * 255.0, 0, 255).astype(np.uint8)
         img_sim = Image.fromarray(frame_uint8, mode="RGB")
         img_full = img_sim.resize((self.width, self.height), Image.Resampling.BILINEAR)
 
-        # 6. Scientific Overlays & Verified Physical Telemetry HUD
         draw = ImageDraw.Draw(img_full)
-        font_large = self._get_font(28)
-        font_small = self._get_font(22)
-        font_mono = self._get_font(20)
-
-        draw.text((80, 120), "BEYOND 80 // NUMERICAL SCHWARZSCHILD DEFLECTION", fill=(0, 210, 255), font=font_large)
-        draw.text((80, 160), "LIGHT TRAJECTORY: NUMERICAL GEODESIC INTEGRATION  |  DISK & STARFIELD: SCREEN-SPACE MODEL", fill=(180, 200, 220), font=font_small)
-
-        # Bottom HUD telemetry
-        y_hud = self.height - 340
-        draw.line([(80, y_hud - 15), (self.width - 80, y_hud - 15)], fill=(255, 255, 255, 60), width=1)
-        draw.text((80, y_hud), f"PHOTON SPHERE: r_ph = 1.5 r_s (3M)  |  SHADOW: b_crit = √27 M ≈ 2.60 r_s", fill=(245, 158, 11), font=font_mono)
-        draw.text((80, y_hud + 32), f"RELATIVISTIC DOPPLER FACTOR: δ^4 * √(1-2M/r)  |  ISCO: r = 6M (3.0 r_s)", fill=(16, 185, 129), font=font_mono)
-        draw.text((80, y_hud + 64), f"CAMERA INCLINATION: 70.0°  |  ORBIT ANGLE: {camera_angle_deg + (t_sec / total_duration) * 35.0:.1f}°  |  FRAME: {int(t_sec * 24):04d}", fill=(148, 163, 184), font=font_mono)
-
+        self._draw_minimal_header(draw, "RELATIVISTIC ACCRETION DISK", "DOPPLER BEAMING: APPROACHING LEFT LIMB BOOSTED (δ⁴)")
+        draw.text((80, self.height - 320), "KEPLERIAN ROTATION NEAR SPEED OF LIGHT AMPLIFIES APPROACHING RADIATION", fill=(200, 220, 240), font=self._get_font(20))
         return img_full
+
+    def _generate_shot_08_payoff_pullback(self, t_sec: float, total_duration: float) -> Image.Image:
+        """
+        Shot 8 (70-80s): Payoff & Cosmic Pullback.
+        Return to the magnified background star, resolving opening question with a cosmic wide pullback.
+        """
+        img = Image.new("RGB", (self.width, self.height), (3, 5, 10))
+        draw = ImageDraw.Draw(img)
+        self._draw_starfield(draw, self.width, self.height, seed=808, t_sec=t_sec)
+
+        cx, cy = self.width // 2, self.height // 2 - 40
+        norm_t = min(1.0, max(0.0, t_sec / max(0.1, total_duration)))
+        scale = math.exp(-1.05 * norm_t)
+
+        r_shadow = int(140 * scale)
+        r_ring = int(220 * scale)
+
+        neb_radius = int(520 * (1.0 + 0.3 * norm_t))
+        for r_n in range(neb_radius, 100, -35):
+            draw.ellipse([cx - r_n, cy - int(r_n * 0.7), cx + r_n, cy + int(r_n * 0.7)], outline=(12, 35, 75))
+
+        draw.ellipse([cx - r_shadow, cy - r_shadow, cx + r_shadow, cy + r_shadow], fill=(0, 0, 0), outline=(20, 50, 95), width=2)
+        draw.ellipse([cx - r_ring, cy - r_ring, cx + r_ring, cy + r_ring], outline=(255, 220, 140), width=max(2, int(4 * scale)))
+
+        draw.line([(cx - int(40 * scale), cy), (cx + int(40 * scale), cy)], fill=(255, 240, 180), width=max(1, int(2 * scale)))
+        draw.line([(cx, cy - int(40 * scale)), (cx, cy + int(40 * scale))], fill=(255, 240, 180), width=max(1, int(2 * scale)))
+
+        self._draw_minimal_header(draw, "COSMIC RESOLUTION", "GRAVITY ACTS AS NATURE'S COSMIC TELESCOPE")
+
+        font_title = self._get_font(34)
+        font_sub = self._get_font(22)
+        draw.text((cx - 100, self.height - 380), "BEYOND 80", fill=(0, 210, 255), font=font_title)
+        draw.text((cx - 180, self.height - 330), "NATURE'S COSMIC TELESCOPE", fill=(245, 158, 11), font=font_sub)
+        return img
+
+    def generate_simulation_frame(
+        self,
+        t_sec: float,
+        total_duration: float,
+        stage: str = "CLIMAX",
+        camera_angle_deg: float = 0.0,
+        doppler_enhancement: float = 1.0,
+        scene_heading: str = "SCHWARZSCHILD NULL GEODESIC LENSING",
+        scene_index: Optional[int] = None,
+    ) -> Image.Image:
+        """
+        Dispatches to the corresponding differentiated shot generator (Shots 1 through 8).
+        """
+        if scene_index == 1:
+            return self._generate_shot_01_mystery(t_sec, total_duration)
+        elif scene_index == 2:
+            return self._generate_shot_02_spacetime_geometry(t_sec, total_duration)
+        elif scene_index == 3:
+            return self._generate_shot_03_dual_trajectories(t_sec, total_duration)
+        elif scene_index == 4:
+            return self._generate_shot_04_multiple_images(t_sec, total_duration)
+        elif scene_index == 5:
+            return self._generate_shot_05_einstein_ring(t_sec, total_duration)
+        elif scene_index == 6:
+            return self._generate_shot_06_shadow_cross_section(t_sec, total_duration)
+        elif scene_index == 7:
+            return self._generate_shot_07_accretion_disk(t_sec, total_duration, doppler_enhancement)
+        elif scene_index == 8:
+            return self._generate_shot_08_payoff_pullback(t_sec, total_duration)
+        else:
+            stage_up = (stage or "").upper()
+            if "HOOK" in stage_up or ("MYSTERY" in stage_up and scene_index == 1):
+                return self._generate_shot_01_mystery(t_sec, total_duration)
+            elif "SPACETIME" in stage_up or "GEOMETRY" in stage_up or stage_up == "MYSTERY":
+                return self._generate_shot_02_spacetime_geometry(t_sec, total_duration)
+            elif "DUAL" in stage_up or "REVELATION" in stage_up:
+                return self._generate_shot_03_dual_trajectories(t_sec, total_duration)
+            elif "IMAGE" in stage_up or "EXPLANATION" in stage_up:
+                return self._generate_shot_04_multiple_images(t_sec, total_duration)
+            elif "RING" in stage_up or "ESCALATION" in stage_up:
+                return self._generate_shot_05_einstein_ring(t_sec, total_duration)
+            elif "SHADOW" in stage_up or "COMPARISON" in stage_up:
+                return self._generate_shot_06_shadow_cross_section(t_sec, total_duration)
+            elif "PAYOFF" in stage_up:
+                return self._generate_shot_08_payoff_pullback(t_sec, total_duration)
+            else:
+                return self._generate_shot_07_accretion_disk(t_sec, total_duration, doppler_enhancement)
 
     def render_dynamic_relativistic_clip(
         self,
@@ -320,18 +688,18 @@ class RelativisticOpticsEngine:
         stage: str = "CLIMAX",
         camera_mode: str = "ORBIT",
         doppler_enhancement: float = 1.0,
-        scene_heading: str = "Relativistic Light Bending"
+        scene_heading: str = "Relativistic Light Bending",
+        scene_index: Optional[int] = None,
     ) -> Path:
         """
-        Renders a multi-frame physically simulated MP4 video clip
-        with continuous time-dependent Schwarzschild ray-tracing.
+        Renders a multi-frame physically simulated MP4 video clip for the requested scene.
         """
         output_mp4_path.parent.mkdir(parents=True, exist_ok=True)
         total_frames = max(24, int(duration_sec * fps))
 
         logger.info(
-            f"Rendering 3D Relativistic Physical Animation ({total_frames} frames @ {fps}fps, {duration_sec:.1f}s): "
-            f"{output_mp4_path.name}"
+            f"Rendering 3D Relativistic Physical Animation Scene {scene_index or 1} "
+            f"({total_frames} frames @ {fps}fps, {duration_sec:.1f}s): {output_mp4_path.name}"
         )
 
         cmd = [
@@ -369,6 +737,7 @@ class RelativisticOpticsEngine:
                     camera_angle_deg=cam_angle,
                     doppler_enhancement=doppler_enhancement,
                     scene_heading=scene_heading,
+                    scene_index=scene_index,
                 )
 
                 proc.stdin.write(frame_img.tobytes())
@@ -452,18 +821,30 @@ class RelativisticOpticsEngine:
 
     def generate_contact_sheet(self, clip_paths: List[Path], output_path: Path) -> Path:
         """
-        Samples a key frame from each scene clip and stitches them into a 2x3 contact sheet grid.
+        Samples a key frame from each scene clip and stitches them into a contact sheet grid.
+        For 8 scenes, uses a 4x2 grid with descriptive narrative titles.
         """
         output_path.parent.mkdir(parents=True, exist_ok=True)
         thumbnails = []
 
+        titles = [
+            "01: OCCULTATION MYSTERY",
+            "02: SPACETIME CURVATURE",
+            "03: DUAL PHOTON PATHS",
+            "04: MULTIPLE APPARENT IMAGES",
+            "05: EINSTEIN-RING ALIGNMENT",
+            "06: SHADOW & HORIZON SCALES",
+            "07: ACCRETION DISK & BEAMING",
+            "08: COSMIC PULLBACK & PAYOFF"
+        ]
+
         for p in clip_paths:
             if not p.exists():
                 continue
-            # Extract 1 frame at 50% through clip using ffmpeg
+            # Sample keyframe at 2.5s into clip (or mid-clip)
             temp_thumb = p.parent / f"thumb_{p.stem}.jpg"
             subprocess.run([
-                self.ffmpeg_bin, "-y", "-ss", "0.5", "-i", str(p),
+                self.ffmpeg_bin, "-y", "-ss", "2.0", "-i", str(p),
                 "-vframes", "1", "-vf", "scale=360:640", str(temp_thumb)
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
             if temp_thumb.exists():
@@ -475,25 +856,31 @@ class RelativisticOpticsEngine:
             blank.save(output_path)
             return output_path
 
-        # Create 2 rows x 3 columns grid (or 3 rows x 2 cols)
-        cols = 3
-        rows = math.ceil(len(thumbnails) / cols)
-        cell_w, cell_h = 360, 640
-        sheet = Image.new("RGB", (cols * cell_w, rows * cell_h + 80), (8, 10, 16))
-        draw = ImageDraw.Draw(sheet)
-        font_header = self._get_font(28)
-        font_caption = self._get_font(20)
+        # Determine grid dimensions
+        if len(thumbnails) == 8:
+            cols = 4
+            rows = 2
+        else:
+            cols = 3
+            rows = math.ceil(len(thumbnails) / cols)
 
-        draw.text((30, 25), "BEYOND 80 // SCENE CONTACT SHEET (NUMERICAL DEFLECTION & RELATIVISTIC PROJECTION)", fill=(0, 210, 255), font=font_header)
+        cell_w, cell_h = 360, 640
+        sheet = Image.new("RGB", (cols * cell_w, rows * cell_h + 90), (8, 10, 16))
+        draw = ImageDraw.Draw(sheet)
+        font_header = self._get_font(26)
+        font_caption = self._get_font(16)
+
+        draw.text((25, 28), "BEYOND 80 // 8-SHOT STORYBOARD CONTACT SHEET (OPTION 4 HYBRID ARCHITECTURE)", fill=(0, 210, 255), font=font_header)
 
         for idx, thumb in enumerate(thumbnails):
             r = idx // cols
             c = idx % cols
             x = c * cell_w
-            y = r * cell_h + 80
+            y = r * cell_h + 90
             sheet.paste(thumb, (x, y))
-            draw.rectangle([x, y, x + cell_w, y + 36], fill=(0, 0, 0, 180))
-            draw.text((x + 10, y + 8), f"SCENE {idx + 1:02d}", fill=(245, 158, 11), font=font_caption)
+            draw.rectangle([x, y, x + cell_w, y + 36], fill=(0, 0, 0, 200))
+            label = titles[idx] if idx < len(titles) else f"SCENE {idx + 1:02d}"
+            draw.text((x + 10, y + 8), f"SCENE {label}", fill=(245, 158, 11), font=font_caption)
 
         sheet.save(output_path, quality=95)
         logger.info(f"Saved contact sheet to {output_path}")

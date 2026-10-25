@@ -322,16 +322,16 @@ class ProductionOrchestrator:
             self.storage.update_agent_status("asset_licensing_agent", AgentStatus.RUNNING, "Auditing provenance and procedural models", job.id)
             scene_assets = []
             manifest_items = []
-            stages = ["HOOK", "MYSTERY", "REVELATION", "ESCALATION", "CLIMAX", "PAYOFF"]
 
-            for idx, stage in enumerate(stages):
+            for idx, sec in enumerate(script.sections):
                 scene_num = idx + 1
+                stage = sec.role
                 asset_file = assets_dir / f"scene_{scene_num:02d}_{stage.lower()}.jpg"
                 _, meta = self.subject_media_director.synthesize_scene_visual(
                     domain=domain,
                     stage=stage,
                     scene_index=scene_num,
-                    title=script.sections[idx].visual_intent,
+                    title=sec.visual_intent,
                     output_path=asset_file,
                 )
                 scene_assets.append(asset_file)
@@ -382,8 +382,9 @@ class ProductionOrchestrator:
             SubtitleGenerator.generate_ass(speech_res.segments, subtitles_ass)
             SubtitleGenerator.generate_srt(speech_res.segments, subtitles_srt)
 
-            # Align script boundaries to measured speech
-            script.align_with_narration_timing(speech_res.sentence_events)
+            # Align script boundaries to measured speech if not using fixed storyboard scene cuts
+            if speech_res.synchronization_type != "SECTION_SPACED_TTS_WORD_BOUNDARIES":
+                script.align_with_narration_timing(speech_res.sentence_events)
             (job_dir / "script.json").write_text(script.model_dump_json(indent=2), encoding="utf-8")
             job.stages_completed.append("NARRATION_AND_SOUND")
             job.agent_steps.append(AgentStepLog(
@@ -414,23 +415,18 @@ class ProductionOrchestrator:
             clips_dir.mkdir(parents=True, exist_ok=True)
             rendered_clips = []
 
-            # Calculate narration-aligned scene durations totaling exact target_duration_sec (80.0s)
-            s1_end = script.sections[0].timeline_end
-            s2_end = script.sections[1].timeline_end
-            s3_end = script.sections[2].timeline_end
-            s4_end = script.sections[3].timeline_end
-            s5_end = script.sections[4].timeline_end
+            # Calculate storyboard scene durations totaling exact target_duration_sec (80.0s)
+            scene_durations = []
+            for i, sec in enumerate(script.sections):
+                if i == 0:
+                    dur = sec.timeline_end
+                elif i == len(script.sections) - 1:
+                    dur = job.target_duration_sec - script.sections[i - 1].timeline_end
+                else:
+                    dur = sec.timeline_end - script.sections[i - 1].timeline_end
+                scene_durations.append(max(2.0, round(dur, 2)))
 
-            scene_durations = [
-                round(s1_end, 2),
-                round(s2_end - s1_end, 2),
-                round(s3_end - s2_end, 2),
-                round(s4_end - s3_end, 2),
-                round(s5_end - s4_end, 2),
-                round(job.target_duration_sec - s5_end, 2)
-            ]
-
-            is_black_hole_sim = ("black hole" in job.topic.lower() or "relativistic" in job.topic.lower() or domain == "black_hole_optics")
+            is_black_hole_sim = ("black hole" in job.topic.lower() or "relativistic" in job.topic.lower() or domain in ["black_hole_optics", "relativistic_astrophysics"])
 
             for idx, sec in enumerate(script.sections):
                 if self._is_cancelled(job_id):
@@ -439,21 +435,21 @@ class ProductionOrchestrator:
 
                 scene_num = idx + 1
                 clip_path = clips_dir / f"scene_{scene_num:02d}.mp4"
-                s_dur = scene_durations[idx] if idx < len(scene_durations) else 13.0
+                s_dur = scene_durations[idx] if idx < len(scene_durations) else 10.0
                 if s_dur <= 0.5:
-                    s_dur = 13.0
+                    s_dur = 10.0
 
                 if is_black_hole_sim:
-                    # Genuine 3D Relativistic Physical Animation
-                    camera_modes = ["ORBIT", "ZOOM_IN", "ORBIT", "ORBIT", "ZOOM_IN", "ORBIT"]
+                    # Genuine Differentiated Scientific Documentary Shots
                     self.rel_engine.render_dynamic_relativistic_clip(
                         output_mp4_path=clip_path,
                         duration_sec=s_dur,
                         fps=24,
-                        stage=stages[idx] if idx < len(stages) else "CLIMAX",
-                        camera_mode=camera_modes[idx % len(camera_modes)],
+                        stage=sec.role or "CLIMAX",
+                        camera_mode="ORBIT",
                         doppler_enhancement=1.0 + (idx * 0.15),
-                        scene_heading=sec.visual_intent or "Relativistic Light Bending"
+                        scene_heading=sec.visual_intent or "Relativistic Light Bending",
+                        scene_index=scene_num,
                     )
                 else:
                     camera_mode = "CINEMATIC_FLOAT"
@@ -478,7 +474,7 @@ class ProductionOrchestrator:
             job.agent_steps.append(AgentStepLog(
                 agent_name="3D Production Agent",
                 status="completed",
-                summary=f"3D animations rendered: 6 physical sequences composited totaling {sum(scene_durations):.1f}s.",
+                summary=f"3D animations rendered: {len(rendered_clips)} physical sequences composited totaling {sum(scene_durations):.1f}s.",
                 duration_sec=(datetime.now() - t0).total_seconds()
             ))
             self.storage.update_agent_status("three_d_production_agent", AgentStatus.SUCCESS, "3D animations rendered", job.id)
@@ -777,7 +773,8 @@ class ProductionOrchestrator:
             stage=script.sections[target_scene_idx].role or "CLIMAX",
             camera_mode=camera_mode,
             doppler_enhancement=doppler_boost,
-            scene_heading=f"Revision v{new_version}: {feedback_comment[:40]}"
+            scene_heading=f"Revision v{new_version}: {feedback_comment[:40]}",
+            scene_index=scene_num,
         )
 
         # 4. Manifest-based cumulative scene inheritance

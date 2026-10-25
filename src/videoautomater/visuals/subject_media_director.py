@@ -66,9 +66,15 @@ class SubjectMediaDirector:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         if domain == "relativistic_astrophysics":
-            img = self._render_black_hole_relativity_frame(stage, scene_index)
+            try:
+                from videoautomater.visuals.relativistic_engine import RelativisticOpticsEngine
+                engine = RelativisticOpticsEngine(width=self.width, height=self.height)
+                img = engine.generate_simulation_frame(t_sec=2.0, total_duration=10.0, scene_index=scene_index, stage=stage)
+            except Exception as e:
+                logger.warning(f"Could not use RelativisticOpticsEngine for static asset: {e}")
+                img = self._render_black_hole_relativity_frame(stage, scene_index)
             nature = "SCIENTIFIC_RELATIVISTIC_SIMULATION_MODEL"
-            desc = "Relativistic ray-traced Schwarzschild null geodesic light deflection model with photon sphere and asymmetric Doppler beaming"
+            desc = f"Relativistic Schwarzschild visual model for Scene {scene_index:02d} ({stage}) under Option 4 Hybrid visual architecture"
         elif domain == "cellular_biophysics":
             img = self._render_biophysical_frame(stage, scene_index)
             nature = "SCIENTIFIC_ILLUSTRATION_MODEL"
