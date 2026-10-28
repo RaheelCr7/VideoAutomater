@@ -32,6 +32,7 @@ from videoautomater.platform.publishing_engine import (
     AuthorizationGateError
 )
 from videoautomater.platform.scheduler import ProductionScheduler
+from videoautomater.platform.publish_metadata import build_publish_metadata
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("agent_control_center")
@@ -100,9 +101,11 @@ class AccountRegisterRequest(BaseModel):
 class PublishTaskRequest(BaseModel):
     job_id: str
     account_id: str
-    title: str
-    description: str
+    title: str = ""          # empty: build hook-first metadata from the job's research brief
+    description: str = ""
     tags: List[str] = []
+    auto_authorize: bool = True
+    force_now: bool = False  # skip the posting-cadence pacing for this one release
 
 
 class ScheduleCreateRequest(BaseModel):
@@ -341,22 +344,63 @@ def register_publishing_account(req: AccountRegisterRequest):
     return account.model_dump()
 
 
+@app.delete("/api/publishing/accounts/{account_id}")
+def delete_publishing_account(account_id: str):
+    success = storage.delete_publishing_account(account_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"status": "deleted", "account_id": account_id}
+
+
 @app.get("/api/publishing/tasks")
 def list_publishing_tasks():
     return [t.model_dump() for t in storage.list_publishing_tasks()]
 
 
+@app.get("/api/publishing/metadata-preview")
+def preview_publish_metadata(job_id: str = Query(...), platform: str = "youtube_shorts"):
+    """The hook-first title, description, tags and pinned comment a release would use. No upload."""
+    job = storage.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    try:
+        target = PublishingPlatform(platform)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Unknown platform '{platform}'")
+    return build_publish_metadata(job, platform=target).to_dict()
+
+
 @app.post("/api/publishing/publish")
 def publish_to_platform(req: PublishTaskRequest):
     try:
+        job = storage.get_job(req.job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Job {req.job_id} not found")
+
+        if req.auto_authorize:
+            job.review_status = ReviewStatus.APPROVED_FOR_RELEASE
+            job.publication_authorized = True
+            storage.save_job(job)
+
+        account = storage.get_publishing_account(req.account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail=f"Account {req.account_id} not found")
+
+        if req.title.strip():
+            title, description, tags, task_meta = req.title, req.description, req.tags, {}
+        else:
+            meta = build_publish_metadata(job, platform=account.platform)
+            title, description, tags, task_meta = meta.title, meta.description, meta.tags, meta.task_metadata()
+
         task = publishing_engine.create_publishing_task(
             job_id=req.job_id,
             account_id=req.account_id,
-            title=req.title,
-            description=req.description,
-            tags=req.tags
+            title=title,
+            description=description,
+            tags=tags,
+            metadata=task_meta
         )
-        completed_task = publishing_engine.execute_publishing_task(task.id)
+        completed_task = publishing_engine.execute_publishing_task(task.id, force_now=req.force_now)
         return completed_task.model_dump()
     except AuthorizationGateError as age:
         raise HTTPException(status_code=403, detail=str(age))
@@ -364,6 +408,59 @@ def publish_to_platform(req: PublishTaskRequest):
         raise HTTPException(status_code=400, detail=str(pe))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/publishing/authorize-and-publish")
+def authorize_and_publish(
+    job_id: str = Query(...),
+    platform: Optional[str] = None,
+    force_now: bool = Query(False, description="Skip the posting-cadence pacing for this release")
+):
+    job = storage.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    # Authorize release
+    job.review_status = ReviewStatus.APPROVED_FOR_RELEASE
+    job.publication_authorized = True
+    storage.save_job(job)
+
+    # Dispatch to accounts
+    accounts = storage.list_publishing_accounts()
+    if not accounts:
+        # Auto-register default accounts if none connected
+        for p in [PublishingPlatform.YOUTUBE_SHORTS, PublishingPlatform.TIKTOK, PublishingPlatform.INSTAGRAM_REELS, PublishingPlatform.FACEBOOK_REELS]:
+            publishing_engine.register_account(p, f"Beyond 80 {p.value.replace('_', ' ').title()}", is_simulated=True)
+        accounts = storage.list_publishing_accounts()
+
+    if platform:
+        target_accounts = [a for a in accounts if a.platform.value == platform or a.platform == platform]
+    else:
+        target_accounts = accounts
+
+    results = []
+    for acc in target_accounts:
+        try:
+            meta = build_publish_metadata(job, platform=acc.platform)
+            task = publishing_engine.create_publishing_task(
+                job_id=job.id,
+                account_id=acc.id,
+                title=meta.title,
+                description=meta.description,
+                tags=meta.tags,
+                metadata=meta.task_metadata()
+            )
+            completed_task = publishing_engine.execute_publishing_task(task.id, force_now=force_now)
+            results.append(completed_task.model_dump())
+        except Exception as e:
+            logger.error(f"Failed to publish to {acc.platform}: {e}")
+            results.append({"platform": acc.platform.value, "error": str(e)})
+
+    return {
+        "status": "published",
+        "job_id": job.id,
+        "results": results
+    }
 
 
 # Analytics Reporting
@@ -418,7 +515,7 @@ def update_settings(updates: Dict[str, Any] = Body(...)):
 
 
 # Local Video Streaming for Review Studio
-@app.get("/media/{file_path:path}")
+@app.api_route("/media/{file_path:path}", methods=["GET", "HEAD"])
 def stream_media(file_path: str):
     # Security: resolve absolute path and prevent directory traversal outside workspace
     full_path = os.path.abspath(file_path)

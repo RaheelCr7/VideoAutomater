@@ -64,6 +64,10 @@ class ResearchBrief(BaseModel):
     brief_id: str
     topic: str
     proposed_title: str
+    headline: str = Field(
+        default="",
+        description="Hook-first publish title, <= 60 chars, the surprising claim first; no channel prefix",
+    )
     alternative_hooks: list[str] = Field(min_length=3, max_length=3)
     central_question: str
     verified_facts: list[str] = Field(min_length=1)

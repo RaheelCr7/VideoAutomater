@@ -29,6 +29,7 @@ VERIFIED_CANDIDATES: list[dict] = [
         ],
         "brief": {
             "proposed_title": "Beyond 80: The Secret Inside the Ice Giants",
+            "headline": "It Rains Diamonds on Neptune. Here's How.",
             "alternative_hooks": [
                 "Deep inside icy planets like Neptune, laboratory physics suggests an astonishing possibility: carbon atoms separating to rain as solid diamonds.",
                 "Why does Neptune radiate approximately two point six times more heat than it absorbs from the distant Sun?",
@@ -106,6 +107,7 @@ VERIFIED_CANDIDATES: list[dict] = [
         "supporting_urls": ["https://www.iaea.org/newscenter/news/meet-oklo-the-earths-two-billion-year-old-only-known-natural-nuclear-reactor"],
         "brief": {
             "proposed_title": "Earth's Secret 2-Billion-Year-Old Nuclear Reactor",
+            "headline": "Earth Ran a Nuclear Reactor 2 Billion Years Ago",
             "alternative_hooks": [
                 "Two billion years before humans split the atom, Earth built its own working nuclear reactor.",
                 "In 1972, French scientists testing African uranium discovered an impossible mystery: someone had already used it.",
@@ -159,6 +161,7 @@ VERIFIED_CANDIDATES: list[dict] = [
         "supporting_urls": ["https://www.smithsonianmag.com/history/decoding-antikythera-mechanism-first-computer-180953979/"],
         "brief": {
             "proposed_title": "The 2,000-Year-Old Greek Clockwork Computer",
+            "headline": "The 2,000-Year-Old Computer Found in a Shipwreck",
             "alternative_hooks": [
                 "Two thousand years ago, ancient Greeks engineered a mechanical computer with thirty bronze gears.",
                 "Divers searching for Roman statues pulled a corroded lump of bronze from the sea that rewrote human history.",
@@ -229,6 +232,7 @@ def get_brief_for_candidate(candidate_id: str) -> ResearchBrief | None:
                 brief_id=f"brief_{candidate_id}",
                 topic=raw["title"],
                 proposed_title=brief_data["proposed_title"],
+                headline=brief_data.get("headline", ""),
                 alternative_hooks=brief_data["alternative_hooks"],
                 central_question=brief_data["central_question"],
                 verified_facts=brief_data["verified_facts"],

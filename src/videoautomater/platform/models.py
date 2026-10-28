@@ -308,3 +308,11 @@ class SystemSettings(BaseModel):
     target_video_duration_sec: float = 80.0
     daily_production_quota: int = 5
     global_style_directive: str = "cinematic, scientifically accurate, dramatic pacing"
+    publish_min_gap_hours: int = Field(
+        default=20, ge=0,
+        description="Minimum hours between two uploads going public on the same live account"
+    )
+    publish_hour_local: int = Field(
+        default=20, ge=0, le=23,
+        description="Hour of day (in default_timezone) at which paced uploads go public"
+    )

@@ -36,6 +36,7 @@ Passed from `ContentResearchAgent` to `ScriptwritingAgent`:
   "brief_id": "brief_20261024_001",
   "topic": "The Mystery of Jupiter's Diamond Rain",
   "proposed_title": "Why Diamonds Fall From Jupiter's Sky",
+  "headline": "It Rains Diamonds on Jupiter. Here's Why.",
   "alternative_hooks": [
     "Right now, it is literally raining solid diamonds on Jupiter.",
     "Deep inside the largest planet in our solar system, gemstones liquify and fall like hail.",
